@@ -1,0 +1,104 @@
+name: gemini
+role: Validator (Visual Proof Engine)
+model: gemini-2.5-pro
+fallback_model: gemini-2.5-flash  # For simpler validations
+api_model: gemini-2.5-pro  # For screenshot analysis
+tools: [playwright, gemini_api]
+
+description: |
+  Gemini validates tests in real browser with visual proof using two-phase validation:
+
+  Phase 1 - Browser Execution:
+  - Launch Playwright browser in headless mode
+  - Execute test file with 45s timeout
+  - Capture screenshots at key steps
+  - Parse test execution results
+
+  Phase 2 - AI Analysis (Optional):
+  - Use Gemini 2.5 Pro API to analyze screenshots
+  - Verify UI correctness through visual validation
+  - Detect visual regressions or UI bugs
+  - Generate confidence scores for test correctness
+
+  Always returns validation against validation_rubric.py schema.
+
+success_criteria:
+  - Browser launches successfully
+  - Test executes within 45s timeout
+  - At least 1 screenshot captured
+  - All assertions pass
+  - Validation rubric criteria met
+
+contracts:
+  browser:
+    timeout_ms: 45000
+    headless: true
+    screenshot: "on"
+    video: "retain-on-failure"
+    trace: "retain-on-failure"
+
+  validation:
+    required_fields:
+      - browser_launched
+      - test_executed
+      - test_passed
+      - screenshots
+      - console_errors
+      - network_failures
+      - execution_time_ms
+
+    pass_criteria:
+      - browser_launched: true
+      - test_executed: true
+      - test_passed: true
+      - min_screenshots: 1
+      - max_execution_time_ms: 45000
+
+  gemini_api:
+    model: gemini-2.5-pro
+    max_tokens: 8192
+    temperature: 0.1  # Low temperature for deterministic validation
+    enabled: false  # Enable when GEMINI_API_KEY is set
+    use_for:
+      - visual_regression_detection
+      - ui_correctness_verification
+      - screenshot_analysis
+
+  artifacts:
+    screenshot_dir: "artifacts/{test_name}"
+    screenshot_pattern: "step_{number:02d}.png"
+    video_dir: "test-results"
+    trace_dir: "test-results"
+
+cost_estimate:
+  # Gemini 2.5 Pro pricing (per 1M tokens)
+  input_cost_per_1m_tokens: 1.25  # ≤200k tokens
+  output_cost_per_1m_tokens: 10.00  # ≤200k tokens
+
+  # Estimated token usage per validation
+  avg_input_tokens: 5000  # Screenshot (~1290 tokens) + prompt
+  avg_output_tokens: 500  # Analysis response
+
+  # Calculated cost per validation
+  estimated_cost_per_validation: 0.0075  # ~$0.0075 per validation
+
+  # Playwright execution
+  playwright_per_test: 0.0  # Infrastructure cost only
+
+usage_notes: |
+  Cost Control:
+  - Gemini API is OPTIONAL - validation works with Playwright alone
+  - Enable Gemini analysis only for:
+    1. Critical paths (auth, payments, checkout)
+    2. Visual regression testing
+    3. UI correctness verification
+  - Average cost: ~$0.0075 per validation with Gemini
+  - Playwright-only validation: $0 API cost
+
+  Authentication:
+  - Set GEMINI_API_KEY environment variable
+  - Get API key from: https://aistudio.google.com/apikey
+
+  Rate Limits:
+  - Gemini 2.5 Pro: 10 RPM (requests per minute)
+  - Monitor rate limit errors in logs

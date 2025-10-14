@@ -13,9 +13,9 @@ SuperAgent is a Voice-Controlled Multi-Agent Testing System that automates Playw
 - **Kaya (Router/Orchestrator)** ✅ - Routes commands and coordinates agents
 - **Runner (Test Executor)** ✅ - Executes Playwright tests via subprocess
 - **Critic (Pre-Validator)** ✅ - Quality gate before expensive validation
+- **Gemini (Validator)** ✅ - Real browser validation with screenshots
 - **Scribe (Test Writer)** 🚧 - Generates Playwright tests (stub created)
 - **Medic (Bug Fixer)** 🚧 - Applies surgical fixes (stub created)
-- **Gemini (Validator)** 🚧 - Real browser validation (stub created)
 
 ### 🏗️ Core Infrastructure
 
@@ -31,7 +31,7 @@ SuperAgent is a Voice-Controlled Multi-Agent Testing System that automates Playw
 
 ```
 SuperAgent/
-├── agent-system/
+├── agent_system/
 │   ├── agents/
 │   │   ├── base_agent.py      # Base class for all agents
 │   │   ├── kaya.py             # Orchestrator ✅
@@ -62,16 +62,30 @@ SuperAgent/
 └── pytest.ini                  # Test config ✅
 ```
 
+## Requirements
+
+- **Python 3.10+** (3.11+ recommended)
+- Node.js 16+ (for Playwright)
+- Redis (optional, for state management)
+- Git
+
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Set Up Python Environment
 
 ```bash
-# Python dependencies (already installed in venv)
+# Ensure you have Python 3.11+ installed
+python3.11 --version  # Should show 3.11.x or higher
+
+# Create virtual environment
+python3.11 -m venv venv
 source venv/bin/activate
+
+# Upgrade pip and install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 
-# Playwright browsers
+# Install Playwright browsers
 npx playwright install
 ```
 
@@ -99,17 +113,20 @@ BASE_URL=http://localhost:3000
 ### 3. Try the CLI
 
 ```bash
+# Activate virtual environment first
+source venv/bin/activate
+
 # Route a task
-python agent-system/cli.py route write_test "Create login test with OAuth"
+python agent_system/cli.py route write_test "Create login test with OAuth"
 
 # Review a test with Critic
-python agent-system/cli.py review tests/auth.spec.ts
+python agent_system/cli.py review tests/auth.spec.ts
 
 # Check system status
-python agent-system/cli.py status
+python agent_system/cli.py status
 
 # Run Kaya orchestrator
-python agent-system/cli.py kaya create test for user registration
+python agent_system/cli.py kaya create test for user registration
 ```
 
 ## Implementation Status
@@ -136,6 +153,7 @@ python agent-system/cli.py kaya create test for user registration
    - Kaya orchestrator - Intent parsing and routing
    - Runner agent - Test execution via subprocess
    - Critic agent - Pre-validation with anti-pattern detection
+   - Gemini agent - Browser validation with screenshots (18 tests, 92% coverage)
 
 5. **HITL System**
    - Queue schema and management
@@ -146,14 +164,13 @@ python agent-system/cli.py kaya create test for user registration
 
 - **Scribe Agent**: Test generation with Anthropic API
 - **Medic Agent**: Bug fixing with regression testing
-- **Gemini Agent**: Browser validation with screenshots
 
 ### 📋 Remaining Work
 
-1. **Complete Core Agents** (4-6 hours)
+1. **Complete Core Agents** (2-4 hours)
+   - ✅ Implement Gemini browser validation
    - Implement Scribe test generation with RAG
    - Implement Medic regression testing workflow
-   - Implement Gemini browser validation
 
 2. **Integration** (2-3 hours)
    - Wire closed-loop: Scribe → Critic → Runner → Gemini → Medic

@@ -8,6 +8,8 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 import time
 
+from agent_system.secrets_manager import get_secrets_manager
+
 
 @dataclass
 class AgentResult:
@@ -48,6 +50,9 @@ class BaseAgent:
             config_path = Path(__file__).parent.parent.parent / '.claude' / 'agents' / f'{agent_name}.yaml'
 
         self.config = self._load_config(config_path) if Path(config_path).exists() else {}
+
+        # Initialize secrets manager for API key management
+        self.secrets_manager = get_secrets_manager()
 
         # Track costs and execution time
         self.total_cost = 0.0

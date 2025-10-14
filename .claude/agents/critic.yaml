@@ -52,7 +52,7 @@ approval_checklist:
   - Error cases handled
 
 output_format:
-  status: "approved" | "rejected"
+  status: string  # "approved" or "rejected"
   reason: string
   issues_found: array
   estimated_cost: float  # USD

@@ -1,0 +1,10 @@
+# HITL Dashboard Requirements
+
+# Web framework
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Required by SuperAgent base system
+redis>=5.0.0
+anthropic>=0.25.0
+python-dotenv>=1.0.0

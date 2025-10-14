@@ -1,21 +1,21 @@
 version: 1
 
 events:
-  - on: "task_queued"
+  - "on": "task_queued"
     emit:
       - task_id
       - feature
       - est_cost
       - timestamp
 
-  - on: "agent_started"
+  - "on": "agent_started"
     emit:
       - agent
       - task_id
       - model
       - tools
 
-  - on: "agent_completed"
+  - "on": "agent_completed"
     emit:
       - agent
       - task_id
@@ -23,7 +23,7 @@ events:
       - duration_ms
       - cost_usd
 
-  - on: "validation_complete"
+  - "on": "validation_complete"
     emit:
       - task_id
       - result
@@ -31,20 +31,20 @@ events:
       - duration_ms
       - screenshots
 
-  - on: "hitl_escalated"
+  - "on": "hitl_escalated"
     emit:
       - task_id
       - attempts
       - last_error
       - priority
 
-  - on: "budget_warning"
+  - "on": "budget_warning"
     emit:
       - current_spend
       - limit
       - remaining
 
-  - on: "budget_exceeded"
+  - "on": "budget_exceeded"
     emit:
       - current_spend
       - limit

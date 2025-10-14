@@ -1,0 +1,654 @@
+openapi: 3.0.3
+info:
+  title: SuperAgent HITL Dashboard API
+  version: 1.0.0
+  description: |
+    REST API for managing Human-in-the-Loop (HITL) escalated test failures in the SuperAgent system.
+
+    When automated test fixes fail after maximum retry attempts, tasks are escalated to human reviewers through this queue system. Human annotations and resolutions are stored in the vector database, enabling agents to learn from human expertise.
+
+    **Authentication**: None (local development only)
+
+    **Base URL**: http://localhost:5001/api
+  contact:
+    name: SuperAgent Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5001/api
+    description: Local development server
+
+tags:
+  - name: queue
+    description: HITL queue management operations
+  - name: health
+    description: Health check operations
+
+paths:
+  /queue:
+    get:
+      tags:
+        - queue
+      summary: List HITL tasks
+      description: |
+        Get a list of tasks in the HITL queue, sorted by priority (highest first).
+
+        Priority is calculated based on:
+        - Number of attempts (more attempts = higher priority)
+        - Feature criticality (auth/payment = higher priority)
+        - Time in queue (older = higher priority)
+      operationId: listTasks
+      parameters:
+        - name: include_resolved
+          in: query
+          description: Include resolved tasks in response
+          required: false
+          schema:
+            type: boolean
+            default: false
+          example: false
+        - name: limit
+          in: query
+          description: Maximum number of tasks to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+          example: 20
+      responses:
+        '200':
+          description: Successful response with task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+              examples:
+                activeTasks:
+                  summary: Active tasks only
+                  value:
+                    success: true
+                    tasks:
+                      - task_id: "task_2025-10-14_12-30-45_abc123"
+                        feature: "checkout payment flow"
+                        code_path: "/Users/rutledge/Documents/DevFolder/SuperAgent/tests/checkout.spec.ts"
+                        logs_path: "/tmp/superagent/logs/task_2025-10-14_12-30-45_abc123.log"
+                        screenshots:
+                          - "/tmp/superagent/screenshots/checkout_step1.png"
+                        attempts: 3
+                        last_error: "TimeoutError: Waiting for selector '[data-testid=\"payment-submit\"]' failed"
+                        priority: 0.85
+                        severity: "high"
+                        created_at: "2025-10-14T12:30:45.123Z"
+                        resolved: false
+                    count: 1
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /queue/stats:
+    get:
+      tags:
+        - queue
+      summary: Get queue statistics
+      description: Retrieve aggregated statistics about the HITL queue including counts and average priority.
+      operationId: getQueueStats
+      responses:
+        '200':
+          description: Successful response with queue statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+              example:
+                success: true
+                stats:
+                  total_count: 25
+                  active_count: 8
+                  resolved_count: 17
+                  avg_priority: 0.62
+                  high_priority_count: 3
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /queue/{task_id}:
+    get:
+      tags:
+        - queue
+      summary: Get task details
+      description: Retrieve detailed information about a specific task including error context, attempt history, and artifacts.
+      operationId: getTask
+      parameters:
+        - name: task_id
+          in: path
+          description: Unique task identifier
+          required: true
+          schema:
+            type: string
+          example: "task_2025-10-14_12-30-45_abc123"
+      responses:
+        '200':
+          description: Successful response with task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+              example:
+                success: true
+                task:
+                  task_id: "task_2025-10-14_12-30-45_abc123"
+                  feature: "checkout payment flow"
+                  code_path: "/Users/rutledge/Documents/DevFolder/SuperAgent/tests/checkout.spec.ts"
+                  logs_path: "/tmp/superagent/logs/task_2025-10-14_12-30-45_abc123.log"
+                  screenshots:
+                    - "/tmp/superagent/screenshots/checkout_step1.png"
+                  attempts: 3
+                  last_error: "TimeoutError: Waiting for selector failed"
+                  priority: 0.85
+                  severity: "high"
+                  created_at: "2025-10-14T12:30:45.123Z"
+                  resolved: false
+                  attempt_history:
+                    - attempt: 1
+                      timestamp: "2025-10-14T12:25:00Z"
+                      error: "Selector not found"
+                      fix_applied: "Added explicit wait"
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /queue/{task_id}/resolve:
+    post:
+      tags:
+        - queue
+      summary: Resolve task
+      description: |
+        Mark a task as resolved with human annotation.
+
+        This endpoint captures human expertise for agent learning. The annotation is stored in the vector database and used to improve future automated fixes.
+
+        **Required fields**: root_cause_category, fix_strategy, severity, human_notes
+      operationId: resolveTask
+      parameters:
+        - name: task_id
+          in: path
+          description: Unique task identifier
+          required: true
+          schema:
+            type: string
+          example: "task_2025-10-14_12-30-45_abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskAnnotation'
+            examples:
+              selectorFix:
+                summary: Selector flaky fix
+                value:
+                  root_cause_category: "selector_flaky"
+                  fix_strategy: "update_selectors"
+                  severity: "medium"
+                  human_notes: "The payment submit button selector changed from 'submit-btn' to 'payment-submit'. Updated test to use new selector."
+                  patch_diff: "--- a/tests/checkout.spec.ts\n+++ b/tests/checkout.spec.ts\n@@ -15,1 +15,1 @@\n-  await page.click('[data-testid=\"submit-btn\"]');\n+  await page.click('[data-testid=\"payment-submit\"]');"
+              timingIssue:
+                summary: Race condition fix
+                value:
+                  root_cause_category: "timing_race_condition"
+                  fix_strategy: "add_explicit_waits"
+                  severity: "low"
+                  human_notes: "Form wasn't fully loaded before clicking submit. Added waitForSelector to ensure form is visible."
+                  patch_diff: "--- a/tests/checkout.spec.ts\n+++ b/tests/checkout.spec.ts\n@@ -14,0 +15,1 @@\n+  await page.waitForSelector('[data-testid=\"payment-form\"]', { state: 'visible' });"
+              applicationBug:
+                summary: Report as bug
+                value:
+                  root_cause_category: "api_contract_changed"
+                  fix_strategy: "report_bug"
+                  severity: "critical"
+                  human_notes: "The payment API changed its response format. This is an application bug, not a test issue. Filed bug report #456 with backend team."
+      responses:
+        '200':
+          description: Task resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveResponse'
+              example:
+                success: true
+                message: "Task task_2025-10-14_12-30-45_abc123 resolved successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: Check the health status of the HITL Dashboard API and its dependencies (Redis).
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                success: true
+                redis: true
+                message: "HITL Dashboard API is running"
+        '500':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Redis connection failed"
+
+components:
+  schemas:
+    Task:
+      type: object
+      required:
+        - task_id
+        - feature
+        - code_path
+        - logs_path
+        - screenshots
+        - attempts
+        - last_error
+        - priority
+        - created_at
+      properties:
+        task_id:
+          type: string
+          description: Unique task identifier
+          example: "task_2025-10-14_12-30-45_abc123"
+        feature:
+          type: string
+          description: Feature being tested
+          example: "checkout payment flow"
+        code_path:
+          type: string
+          description: Absolute path to test file
+          example: "/Users/rutledge/Documents/DevFolder/SuperAgent/tests/checkout.spec.ts"
+        logs_path:
+          type: string
+          description: Absolute path to execution logs
+          example: "/tmp/superagent/logs/task_2025-10-14_12-30-45_abc123.log"
+        screenshots:
+          type: array
+          description: Array of screenshot file paths
+          items:
+            type: string
+          example:
+            - "/tmp/superagent/screenshots/checkout_step1.png"
+            - "/tmp/superagent/screenshots/checkout_error.png"
+        attempts:
+          type: integer
+          description: Number of fix attempts made (1-3)
+          minimum: 1
+          maximum: 10
+          example: 3
+        last_error:
+          type: string
+          description: Most recent error message
+          example: "TimeoutError: Waiting for selector '[data-testid=\"payment-submit\"]' failed: timeout 30000ms exceeded"
+        priority:
+          type: number
+          format: float
+          description: Priority score (0.0-1.0, higher = more urgent)
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.85
+        severity:
+          type: string
+          description: Issue severity level
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+          example: "high"
+        escalation_reason:
+          type: string
+          description: Reason for escalation to HITL queue
+          example: "max_retries_exceeded"
+        ai_diagnosis:
+          type: string
+          description: AI's analysis of the issue
+          example: "Selector not found after 3 attempts. Possible causes: 1) Selector changed, 2) Payment form not loading, 3) Race condition"
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when task was created
+          example: "2025-10-14T12:30:45.123Z"
+        resolved:
+          type: boolean
+          description: Whether task has been resolved
+          default: false
+          example: false
+        resolved_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when task was resolved
+          example: "2025-10-14T13:15:30.456Z"
+        root_cause_category:
+          type: string
+          description: Root cause category (filled after resolution)
+          enum:
+            - selector_flaky
+            - timing_race_condition
+            - data_dependency
+            - environment_config
+            - api_contract_changed
+            - browser_compatibility
+            - authentication_issue
+            - unknown
+          example: "selector_flaky"
+        fix_strategy:
+          type: string
+          description: Fix strategy applied (filled after resolution)
+          enum:
+            - update_selectors
+            - add_explicit_waits
+            - mock_external_api
+            - fix_test_data
+            - update_assertions
+            - refactor_test_logic
+            - report_bug
+            - other
+          example: "update_selectors"
+        human_notes:
+          type: string
+          description: Human analysis and notes (filled after resolution)
+          example: "Updated data-testid selectors to match new component structure"
+        patch_diff:
+          type: string
+          description: Code patch applied by human (filled after resolution)
+          example: "--- a/tests/checkout.spec.ts\n+++ b/tests/checkout.spec.ts\n@@ -15,1 +15,1 @@\n-  old\n+  new"
+        artifacts:
+          type: object
+          description: Artifacts from attempted fixes
+          properties:
+            diff:
+              type: string
+              description: Code changes attempted by Medic agent
+              example: "--- a/tests/checkout.spec.ts\n+++ b/tests/checkout.spec.ts\n..."
+        attempt_history:
+          type: array
+          description: History of all fix attempts
+          items:
+            type: object
+            properties:
+              attempt:
+                type: integer
+                example: 1
+              timestamp:
+                type: string
+                format: date-time
+                example: "2025-10-14T12:25:00Z"
+              error:
+                type: string
+                example: "Selector not found"
+              fix_applied:
+                type: string
+                example: "Added explicit wait"
+
+    TaskAnnotation:
+      type: object
+      required:
+        - root_cause_category
+        - fix_strategy
+        - severity
+        - human_notes
+      properties:
+        root_cause_category:
+          type: string
+          description: Root cause of the failure
+          enum:
+            - selector_flaky
+            - timing_race_condition
+            - data_dependency
+            - environment_config
+            - api_contract_changed
+            - browser_compatibility
+            - authentication_issue
+            - unknown
+          example: "selector_flaky"
+        fix_strategy:
+          type: string
+          description: Strategy used to fix the issue
+          enum:
+            - update_selectors
+            - add_explicit_waits
+            - mock_external_api
+            - fix_test_data
+            - update_assertions
+            - refactor_test_logic
+            - report_bug
+            - other
+          example: "update_selectors"
+        severity:
+          type: string
+          description: Issue severity level
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+          example: "medium"
+        human_notes:
+          type: string
+          description: Detailed human analysis and findings (minimum 10 characters recommended)
+          minLength: 1
+          example: "The payment submit button selector changed from 'submit-btn' to 'payment-submit'. Updated test to use new selector. Also added explicit wait for payment form to be visible before clicking submit."
+        patch_diff:
+          type: string
+          description: Code changes applied (unified diff format)
+          example: "--- a/tests/checkout.spec.ts\n+++ b/tests/checkout.spec.ts\n@@ -15,7 +15,9 @@\n+  // Wait for payment form to be visible\n+  await page.waitForSelector('[data-testid=\"payment-form\"]', { state: 'visible' });\n   // Submit payment\n-  await page.click('[data-testid=\"submit-btn\"]');\n+  await page.click('[data-testid=\"payment-submit\"]');"
+
+    QueueStats:
+      type: object
+      properties:
+        total_count:
+          type: integer
+          description: Total number of tasks (active + resolved)
+          example: 25
+        active_count:
+          type: integer
+          description: Number of unresolved tasks
+          example: 8
+        resolved_count:
+          type: integer
+          description: Number of resolved tasks
+          example: 17
+        avg_priority:
+          type: number
+          format: float
+          description: Average priority of active tasks (0.0-1.0)
+          example: 0.62
+        high_priority_count:
+          type: integer
+          description: Number of active tasks with priority > 0.7
+          example: 3
+
+    TaskListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        count:
+          type: integer
+          description: Number of tasks returned
+          example: 8
+
+    TaskResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        task:
+          $ref: '#/components/schemas/Task'
+
+    StatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        stats:
+          $ref: '#/components/schemas/QueueStats'
+
+    ResolveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Task task_2025-10-14_12-30-45_abc123 resolved successfully"
+
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        redis:
+          type: boolean
+          description: Redis connection status
+          example: true
+        message:
+          type: string
+          example: "HITL Dashboard API is running"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Redis connection failed"
+
+  responses:
+    BadRequest:
+      description: Bad request - missing required fields or invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingFields:
+              summary: Missing required fields
+              value:
+                success: false
+                error: "Missing required fields: root_cause_category, severity"
+            invalidValue:
+              summary: Invalid enum value
+              value:
+                success: false
+                error: "Invalid severity value. Must be one of: low, medium, high, critical"
+
+    TaskNotFound:
+      description: Task not found or already resolved
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Task not found or already resolved"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            redisError:
+              summary: Redis connection failed
+              value:
+                success: false
+                error: "Redis connection failed"
+            genericError:
+              summary: Generic server error
+              value:
+                success: false
+                error: "Internal server error"
+
+  examples:
+    HighPriorityTask:
+      summary: High priority authentication task
+      value:
+        task_id: "task_2025-10-14_14-20-15_def456"
+        feature: "user login with OAuth"
+        code_path: "/Users/rutledge/Documents/DevFolder/SuperAgent/tests/auth.spec.ts"
+        logs_path: "/tmp/superagent/logs/task_2025-10-14_14-20-15_def456.log"
+        screenshots:
+          - "/tmp/superagent/screenshots/login_form.png"
+        attempts: 3
+        last_error: "OAuth redirect failed - callback URL mismatch"
+        priority: 0.95
+        severity: "critical"
+        escalation_reason: "max_retries_exceeded"
+        created_at: "2025-10-14T14:20:15.789Z"
+        resolved: false
+
+    LowPriorityTask:
+      summary: Low priority UI test
+      value:
+        task_id: "task_2025-10-14_10-15-30_ghi789"
+        feature: "footer copyright year update"
+        code_path: "/Users/rutledge/Documents/DevFolder/SuperAgent/tests/ui.spec.ts"
+        logs_path: "/tmp/superagent/logs/task_2025-10-14_10-15-30_ghi789.log"
+        screenshots:
+          - "/tmp/superagent/screenshots/footer.png"
+        attempts: 1
+        last_error: "Expected '2025' but got '2024'"
+        priority: 0.15
+        severity: "low"
+        escalation_reason: "ai_low_confidence"
+        created_at: "2025-10-14T10:15:30.456Z"
+        resolved: false
+
+    ResolvedTask:
+      summary: Resolved task with annotation
+      value:
+        task_id: "task_2025-10-13_16-45-20_jkl012"
+        feature: "checkout cart total calculation"
+        code_path: "/Users/rutledge/Documents/DevFolder/SuperAgent/tests/checkout.spec.ts"
+        logs_path: "/tmp/superagent/logs/task_2025-10-13_16-45-20_jkl012.log"
+        screenshots:
+          - "/tmp/superagent/screenshots/cart.png"
+        attempts: 2
+        last_error: "Expected total: $99.99, got: $89.99"
+        priority: 0.55
+        severity: "medium"
+        escalation_reason: "regression_detected"
+        created_at: "2025-10-13T16:45:20.123Z"
+        resolved: true
+        resolved_at: "2025-10-13T17:30:45.789Z"
+        root_cause_category: "data_dependency"
+        fix_strategy: "fix_test_data"
+        human_notes: "Test was using old discount calculation. Updated test data to reflect new 10% discount policy."
+        patch_diff: "--- a/tests/checkout.spec.ts\n+++ b/tests/checkout.spec.ts\n@@ -20,1 +20,1 @@\n-  await expect(total).toHaveText('$99.99');\n+  await expect(total).toHaveText('$89.99');"

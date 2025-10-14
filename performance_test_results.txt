@@ -1,0 +1,222 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-8.4.2, pluggy-1.6.0 -- /Users/rutledge/Documents/DevFolder/SuperAgent/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/rutledge/Documents/DevFolder/SuperAgent
+configfile: pytest.ini
+plugins: asyncio-1.2.0, anyio-4.11.0, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 7 items
+
+tests/load/test_performance.py::TestScribeConcurrency::test_concurrent_test_generation 
+================================================================================
+SCRIBE CONCURRENT TEST GENERATION RESULTS
+================================================================================
+Total Requests: 10
+Successful: 10
+Failed: 0
+Error Rate: 0.00%
+
+Response Times (ms):
+  P50: 255.95
+  P95: 256.86
+  P99: 256.86
+  Min: 247.77
+  Max: 256.86
+  Mean: 253.34
+  StdDev: 4.04
+
+Throughput: 38.89 requests/sec
+Total Duration: 257.15ms
+================================================================================
+
+PASSED
+tests/load/test_performance.py::TestScribeConcurrency::test_scribe_with_profiling 
+================================================================================
+SCRIBE AGENT PROFILING RESULTS (Top 20 Functions)
+================================================================================
+         9373 function calls (8589 primitive calls) in 0.013 seconds
+
+   Ordered by: cumulative time
+   List reduced from 475 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.013    0.013 scribe.py:125(execute)
+        1    0.000    0.000    0.013    0.013 scribe.py:204(_generate_with_validation)
+        1    0.000    0.000    0.013    0.013 scribe.py:382(_generate_test_with_rag)
+        1    0.000    0.000    0.013    0.013 scribe.py:306(_query_similar_patterns)
+        1    0.000    0.000    0.013    0.013 vector_client.py:119(search_test_patterns)
+        1    0.000    0.000    0.012    0.012 vector_client.py:78(_generate_embedding)
+        1    0.000    0.000    0.012    0.012 _contextlib.py:117(decorate_context)
+        1    0.000    0.000    0.011    0.011 SentenceTransformer.py:856(encode)
+        1    0.000    0.000    0.006    0.006 SentenceTransformer.py:1161(forward)
+    116/3    0.000    0.000    0.006    0.002 module.py:1769(_wrapped_call_impl)
+    116/3    0.000    0.000    0.006    0.002 module.py:1777(_call_impl)
+        1    0.000    0.000    0.006    0.006 Transformer.py:237(forward)
+        1    0.000    0.000    0.006    0.006 modeling_bert.py:878(forward)
+        1    0.000    0.000    0.003    0.003 modeling_bert.py:608(forward)
+        6    0.000    0.000    0.003    0.000 modeling_layers.py:60(__call__)
+     18/6    0.000    0.000    0.003    0.000 deprecation.py:120(wrapped_func)
+        6    0.000    0.000    0.003    0.000 modeling_bert.py:546(forward)
+        1    0.002    0.002    0.002    0.002 {method 'cpu' of 'torch._C.TensorBase' objects}
+        1    0.002    0.002    0.002    0.002 modeling_attn_mask_utils.py:435(_prepare_4d_attention_mask_for_sdpa)
+        6    0.000    0.000    0.002    0.000 modeling_bert.py:477(forward)
+
+
+
+================================================================================
+
+PASSED
+tests/load/test_performance.py::TestRunnerConcurrency::test_concurrent_test_execution huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+
+================================================================================
+RUNNER CONCURRENT TEST EXECUTION RESULTS
+================================================================================
+Total Requests: 10
+Successful: 0
+Failed: 10
+Error Rate: 100.00%
+
+Response Times (ms):
+  P50: 2446.68
+  P95: 2458.20
+  P99: 2458.20
+  Min: 2296.26
+  Max: 2458.20
+  Mean: 2431.37
+  StdDev: 48.35
+
+Throughput: 4.06 requests/sec
+Total Duration: 2460.27ms
+================================================================================
+
+PASSED
+tests/load/test_performance.py::TestRedisPerformance::test_redis_connection_pooling 
+================================================================================
+REDIS CONNECTION POOLING RESULTS
+================================================================================
+Total Requests: 50
+Successful: 10
+Failed: 40
+Error Rate: 80.00%
+
+Response Times (ms):
+  P50: 0.00
+  P95: 24.74
+  P99: 25.04
+  Min: 0.00
+  Max: 25.04
+  Mean: 4.93
+  StdDev: 9.95
+
+Throughput: 1962.32 requests/sec
+Total Duration: 25.48ms
+
+Connection Pool Config:
+  Max Connections: 10
+  Socket Timeout: 5s
+================================================================================
+
+FAILED
+tests/load/test_performance.py::TestFullPipeline::test_router_under_load 
+================================================================================
+ROUTER CONCURRENT ROUTING RESULTS
+================================================================================
+Total Requests: 100
+Successful: 100
+Failed: 0
+Error Rate: 0.00%
+
+Response Times (ms):
+  P50: 0.01
+  P95: 0.01
+  P99: 0.23
+  Min: 0.01
+  Max: 0.23
+  Mean: 0.01
+  StdDev: 0.02
+
+Throughput: 44863.66 requests/sec
+Total Duration: 2.23ms
+================================================================================
+
+PASSED
+tests/load/test_performance.py::TestBenchmarks::test_benchmark_complexity_estimation 
+================================================================================
+COMPLEXITY ESTIMATION BENCHMARK
+================================================================================
+Iterations: 1000
+Total Duration: 7.35ms
+Average Time: 0.0074ms per estimation
+Throughput: 135962.40 estimations/sec
+================================================================================
+
+PASSED
+tests/load/test_performance.py::TestBenchmarks::test_benchmark_redis_operations 
+================================================================================
+REDIS OPERATIONS BENCHMARK
+================================================================================
+SET:
+  Average: 0.2288ms
+  P95: 0.2592ms
+  Throughput: 4371.56 ops/sec
+GET:
+  Average: 0.1856ms
+  P95: 0.2081ms
+  Throughput: 5389.15 ops/sec
+DELETE:
+  Average: 0.1859ms
+  P95: 0.2027ms
+  Throughput: 5379.31 ops/sec
+================================================================================
+
+PASSED
+
+=================================== FAILURES ===================================
+______________ TestRedisPerformance.test_redis_connection_pooling ______________
+tests/load/test_performance.py:414: in test_redis_connection_pooling
+    assert summary['error_rate'] < 0.05, f"Redis error rate {summary['error_rate']:.2%} exceeds 5%"
+E   AssertionError: Redis error rate 80.00% exceeds 5%
+E   assert 0.8 < 0.05
+=========================== short test summary info ============================
+FAILED tests/load/test_performance.py::TestRedisPerformance::test_redis_connection_pooling - AssertionError: Redis error rate 80.00% exceeds 5%
+assert 0.8 < 0.05
+========================= 1 failed, 6 passed in 8.79s ==========================

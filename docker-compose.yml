@@ -1,0 +1,293 @@
+# SuperAgent - Docker Compose Configuration
+# Production deployment with SuperAgent app and Redis state management
+
+services:
+  # ==============================================================================
+  # Redis: Hot state management (session data, task queue, voice transcripts)
+  # TTL: 1 hour for ephemeral data
+  # ==============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: superagent-redis
+    restart: unless-stopped
+
+    # Graceful shutdown configuration
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+
+    # Redis configuration
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+
+    # Persist Redis data for durability
+    volumes:
+      - redis_data:/data
+
+    # Expose Redis port (only to SuperAgent service, not to host)
+    expose:
+      - "6379"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+
+    networks:
+      - superagent-network
+
+
+  # ==============================================================================
+  # Chroma Vector DB (Optional): Cold storage for test patterns and RAG
+  # Uncomment if you want to run Vector DB as a separate service
+  # ==============================================================================
+  # chromadb:
+  #   image: ghcr.io/chroma-core/chroma:latest
+  #   container_name: superagent-chromadb
+  #   restart: unless-stopped
+  #
+  #   volumes:
+  #     - vector_db_data:/chroma/chroma
+  #
+  #   environment:
+  #     - IS_PERSISTENT=TRUE
+  #     - ANONYMIZED_TELEMETRY=FALSE
+  #
+  #   expose:
+  #     - "8000"
+  #
+  #   # Optional: expose for external access
+  #   # ports:
+  #   #   - "8100:8000"
+  #
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+  #
+  #   networks:
+  #     - superagent-network
+
+
+  # ==============================================================================
+  # SuperAgent: Main application
+  # Multi-agent system for Playwright test automation
+  # ==============================================================================
+  superagent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production  # Use 'development' for dev mode
+      # Build arguments for customization
+      args:
+        - PYTHON_VERSION=3.11
+
+    container_name: superagent-app
+    restart: unless-stopped
+
+    # Graceful shutdown configuration
+    stop_signal: SIGTERM
+    stop_grace_period: 45s
+
+    # Override default CMD to keep container running
+    # Use `docker-compose exec superagent python agent_system/cli.py <command>` to interact
+    command: tail -f /dev/null
+
+    # Environment variables from .env file
+    # Create .env file based on .env.example
+    env_file:
+      - .env
+
+    # Additional environment variables
+    environment:
+      # Redis connection (using service name as hostname)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+      # Vector DB path (persisted via volume)
+      - VECTOR_DB_PATH=/app/vector_db
+
+      # Playwright configuration
+      - PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
+      # Python settings
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+      # Application settings
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+    # Volume mounts for data persistence and local development
+    volumes:
+      # Test files (read-write for test generation)
+      - ./tests:/app/tests
+
+      # Artifacts: test results, screenshots, videos, traces
+      - ./artifacts:/app/tests/artifacts
+
+      # Logs: application logs, agent activity
+      - ./logs:/app/logs
+
+      # Vector DB: cold storage for test patterns, bug fixes, HITL annotations
+      - vector_db_data:/app/vector_db
+
+      # Playwright test results and reports
+      - ./test-results:/app/test-results
+      - ./playwright-report:/app/playwright-report
+
+      # Optional: Mount local code for development (comment out for production)
+      # - ./agent_system:/app/agent_system:ro
+
+    # Port mappings
+    ports:
+      # Observability dashboard (WebSocket events)
+      - "${OBSERVABILITY_PORT:-8000}:8000"
+      # HITL dashboard (human-in-the-loop UI)
+      - "${HITL_PORT:-8001}:8001"
+      # Metrics and monitoring endpoint
+      - "${METRICS_PORT:-8002}:8002"
+
+    # Dependencies
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "from agent_system.cli import main; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+    networks:
+      - superagent-network
+
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  superagent-network:
+    driver: bridge
+    name: superagent-network
+
+
+# ==============================================================================
+# Volumes: Persistent data storage
+# ==============================================================================
+volumes:
+  # Redis data (session state, task queue)
+  redis_data:
+    driver: local
+    name: superagent-redis-data
+
+  # Vector DB data (test patterns, bug fixes, HITL annotations)
+  vector_db_data:
+    driver: local
+    name: superagent-vector-db
+
+
+# ==============================================================================
+# Usage Examples:
+# ==============================================================================
+# Start all services:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f
+#   docker-compose logs -f superagent
+#   docker-compose logs -f redis
+#
+# Execute commands:
+#   docker-compose exec superagent python agent_system/cli.py status
+#   docker-compose exec superagent python agent_system/cli.py route write_test "Create login test"
+#   docker-compose exec superagent python agent_system/cli.py kaya "create test for checkout"
+#   docker-compose exec superagent python agent_system/cli.py run tests/auth.spec.ts
+#   docker-compose exec superagent python agent_system/cli.py review tests/auth.spec.ts
+#
+# Interactive shell:
+#   docker-compose exec superagent /bin/bash
+#
+# Stop services:
+#   docker-compose down
+#
+# Stop and remove volumes (WARNING: deletes all data):
+#   docker-compose down -v
+#
+# Rebuild after code changes:
+#   docker-compose up -d --build
+#
+# Scale services (if needed):
+#   docker-compose up -d --scale superagent=3
+#
+# View resource usage:
+#   docker-compose stats
+#
+# Health check status:
+#   docker-compose ps
+# ==============================================================================
+
+
+# ==============================================================================
+# Production Deployment Notes:
+# ==============================================================================
+# 1. Create .env file with production values:
+#    - ANTHROPIC_API_KEY=sk-ant-...
+#    - OPENAI_API_KEY=sk-...
+#    - GEMINI_API_KEY=...
+#    - BASE_URL=https://production-app.com
+#    - REDIS_HOST=redis
+#    - REDIS_PORT=6379
+#
+# 2. Ensure proper permissions on mounted volumes:
+#    mkdir -p tests artifacts logs test-results playwright-report
+#    chmod -R 755 tests artifacts logs test-results playwright-report
+#
+# 3. For production, consider:
+#    - Using external Redis cluster (AWS ElastiCache, Redis Cloud)
+#    - Setting up log aggregation (ELK, Splunk, CloudWatch)
+#    - Enabling TLS for Redis connection
+#    - Running as non-root user (uncomment USER in Dockerfile)
+#    - Using secrets management (Docker Secrets, AWS Secrets Manager)
+#
+# 4. Monitoring:
+#    - Set up health check monitoring
+#    - Configure alerting for failed health checks
+#    - Monitor resource usage (CPU, memory, disk)
+#    - Track cost metrics (API usage, model costs)
+#
+# 5. Backup strategy:
+#    - Backup vector_db volume regularly
+#    - Export Redis data for disaster recovery
+#    - Version control test files and configurations
+# ==============================================================================

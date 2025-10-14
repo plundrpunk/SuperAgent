@@ -43,15 +43,15 @@ cost_targets:
 
 cost_overrides:
   critical_paths:
-    - pattern: "**/auth/**/*.spec.ts"
+    - pattern: "*auth*.spec.ts"
       max_cost_usd: 2.00
       reason: "Authentication is critical infrastructure"
 
-    - pattern: "**/payment/**/*.spec.ts"
+    - pattern: "*payment*.spec.ts"
       max_cost_usd: 3.00
       reason: "Payment flows require thorough validation"
 
-    - pattern: "**/admin/**/*.spec.ts"
+    - pattern: "*admin*.spec.ts"
       max_cost_usd: 1.50
       reason: "Admin features affect all users"
 

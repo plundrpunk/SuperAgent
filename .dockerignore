@@ -1,0 +1,250 @@
+# SuperAgent - Docker Ignore File
+# Files and directories excluded from Docker build context
+
+# ==============================================================================
+# Python
+# ==============================================================================
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.hypothesis/
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+
+# ==============================================================================
+# Node.js / Playwright
+# ==============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Playwright artifacts (generated during test runs)
+test-results/
+playwright-report/
+playwright/.cache/
+
+
+# ==============================================================================
+# Environment and Secrets
+# ==============================================================================
+# Environment files (use .env.example instead)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# API keys and credentials
+credentials.json
+secrets.yaml
+.secrets/
+
+
+# ==============================================================================
+# Git
+# ==============================================================================
+.git/
+.gitignore
+.gitattributes
+
+
+# ==============================================================================
+# IDE / Editor
+# ==============================================================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+
+# ==============================================================================
+# OS
+# ==============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+
+# ==============================================================================
+# Application Artifacts (generated during runtime)
+# ==============================================================================
+# Test artifacts (screenshots, videos, traces)
+artifacts/
+logs/
+*.log
+
+# Vector database (will be mounted as volume)
+vector_db/
+chroma_db/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+
+# ==============================================================================
+# Documentation (not needed in production image)
+# ==============================================================================
+# Markdown documentation files
+*.md
+!README.md
+docs/
+
+# Documentation artifacts
+IMPLEMENTATION_SUMMARY.md
+INTEGRATION_TEST_SUMMARY.md
+MEDIC_HITL_ESCALATION.md
+RAG_INTEGRATION_SUMMARY.md
+SCRIBE_IMPLEMENTATION_SUMMARY.md
+SCRIBE_QUICK_START.md
+TEST_SCRIBE_SUMMARY.md
+*_DOCS.md
+
+
+# ==============================================================================
+# Development Tools
+# ==============================================================================
+# Linters and formatters
+.flake8
+.pylintrc
+.black
+.isort.cfg
+
+# Docker files (exclude from nested builds)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+
+# ==============================================================================
+# Project Specific
+# ==============================================================================
+# Claude AI conversation artifacts (but keep agent configs)
+# Note: .claude/agents/ contains critical YAML configs and MUST be included
+# .claude/
+*.claude
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Example files (use as templates, not in production)
+.env.example
+*.example
+
+# Test data and fixtures (if large)
+test_data/
+fixtures/
+
+# Validation scripts (development only)
+validate_yamls.py
+
+
+# ==============================================================================
+# CI/CD
+# ==============================================================================
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+Jenkinsfile
+
+
+# ==============================================================================
+# Include Exceptions (whitelist critical files)
+# ==============================================================================
+# If you need to include specific files that match patterns above, use !
+# Example: !important_script.py
+
+# NOTE: Do not exclude these critical files:
+# - requirements.txt (needed for pip install)
+# - pyproject.toml (needed for package metadata)
+# - pytest.ini (needed for test configuration)
+# - .claude/ directory (agent configurations)
+# - agent_system/ (application code)
+# - tests/templates/ (test templates)

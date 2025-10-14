@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Observability Dashboard - SuperAgent</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>SuperAgent Observability</h1>
+                    <p class="subtitle">Real-Time Multi-Agent System Monitoring</p>
+                </div>
+                <div class="connection-status">
+                    <span class="status-indicator" id="ws-status"></span>
+                    <span id="ws-status-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Cost Tracking Section -->
+        <section class="dashboard-section">
+            <h2>Cost Tracking</h2>
+            <div class="cost-grid">
+                <div class="cost-card">
+                    <div class="cost-label">Current Spend</div>
+                    <div class="cost-value" id="current-spend">$0.00</div>
+                </div>
+                <div class="cost-card">
+                    <div class="cost-label">Budget</div>
+                    <div class="cost-value" id="budget">$10.00</div>
+                </div>
+                <div class="cost-card">
+                    <div class="cost-label">Remaining</div>
+                    <div class="cost-value" id="remaining">$10.00</div>
+                </div>
+                <div class="cost-card">
+                    <div class="cost-label">% Used</div>
+                    <div class="cost-value" id="percent-used">0%</div>
+                </div>
+            </div>
+            <div class="cost-bar-container">
+                <div class="cost-bar-label">Budget Usage</div>
+                <div class="cost-bar-track">
+                    <div class="cost-bar-fill" id="cost-bar-fill" style="width: 0%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Agent Status Section -->
+        <section class="dashboard-section">
+            <h2>Agent Status</h2>
+            <div class="agent-grid">
+                <div class="agent-card" data-agent="kaya">
+                    <div class="agent-header">
+                        <h3>Kaya</h3>
+                        <span class="agent-badge idle">Idle</span>
+                    </div>
+                    <div class="agent-role">Router/Orchestrator</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <span class="stat-label">Model:</span>
+                            <span class="stat-value">Haiku</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Tasks:</span>
+                            <span class="stat-value" id="kaya-tasks">0</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Cost:</span>
+                            <span class="stat-value" id="kaya-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card" data-agent="scribe">
+                    <div class="agent-header">
+                        <h3>Scribe</h3>
+                        <span class="agent-badge idle">Idle</span>
+                    </div>
+                    <div class="agent-role">Test Writer</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <span class="stat-label">Model:</span>
+                            <span class="stat-value">Sonnet 4.5</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Tasks:</span>
+                            <span class="stat-value" id="scribe-tasks">0</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Cost:</span>
+                            <span class="stat-value" id="scribe-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card" data-agent="runner">
+                    <div class="agent-header">
+                        <h3>Runner</h3>
+                        <span class="agent-badge idle">Idle</span>
+                    </div>
+                    <div class="agent-role">Test Executor</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <span class="stat-label">Model:</span>
+                            <span class="stat-value">Haiku</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Tasks:</span>
+                            <span class="stat-value" id="runner-tasks">0</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Cost:</span>
+                            <span class="stat-value" id="runner-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card" data-agent="medic">
+                    <div class="agent-header">
+                        <h3>Medic</h3>
+                        <span class="agent-badge idle">Idle</span>
+                    </div>
+                    <div class="agent-role">Bug Fixer</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <span class="stat-label">Model:</span>
+                            <span class="stat-value">Sonnet 4.5</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Tasks:</span>
+                            <span class="stat-value" id="medic-tasks">0</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Cost:</span>
+                            <span class="stat-value" id="medic-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card" data-agent="critic">
+                    <div class="agent-header">
+                        <h3>Critic</h3>
+                        <span class="agent-badge idle">Idle</span>
+                    </div>
+                    <div class="agent-role">Pre-Validator</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <span class="stat-label">Model:</span>
+                            <span class="stat-value">Haiku</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Tasks:</span>
+                            <span class="stat-value" id="critic-tasks">0</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Cost:</span>
+                            <span class="stat-value" id="critic-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="agent-card" data-agent="gemini">
+                    <div class="agent-header">
+                        <h3>Gemini</h3>
+                        <span class="agent-badge idle">Idle</span>
+                    </div>
+                    <div class="agent-role">Validator</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <span class="stat-label">Model:</span>
+                            <span class="stat-value">Gemini 2.5 Pro</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Tasks:</span>
+                            <span class="stat-value" id="gemini-tasks">0</span>
+                        </div>
+                        <div class="agent-stat">
+                            <span class="stat-label">Cost:</span>
+                            <span class="stat-value" id="gemini-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Active Tasks Section -->
+        <section class="dashboard-section">
+            <h2>Active Tasks</h2>
+            <div id="active-tasks-container" class="active-tasks-list">
+                <div class="empty-state">No active tasks</div>
+            </div>
+        </section>
+
+        <!-- Metrics Section -->
+        <section class="dashboard-section">
+            <h2>Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon">✓</div>
+                    <div class="metric-value" id="test-pass-rate">0%</div>
+                    <div class="metric-label">Test Pass Rate</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">⚠</div>
+                    <div class="metric-value" id="critic-rejection-rate">0%</div>
+                    <div class="metric-label">Critic Rejection Rate</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">⏱</div>
+                    <div class="metric-value" id="avg-completion-time">0s</div>
+                    <div class="metric-label">Avg Completion Time</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">🔄</div>
+                    <div class="metric-value" id="avg-retry-count">0.0</div>
+                    <div class="metric-label">Avg Retry Count</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">📋</div>
+                    <div class="metric-value" id="hitl-queue-depth">0</div>
+                    <div class="metric-label">HITL Queue Depth</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">⚡</div>
+                    <div class="metric-value" id="agent-utilization">0%</div>
+                    <div class="metric-label">Agent Utilization</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Events Section -->
+        <section class="dashboard-section">
+            <div class="section-header">
+                <h2>Recent Events</h2>
+                <button id="clear-events-btn" class="btn-secondary">Clear Events</button>
+            </div>
+            <div id="events-timeline" class="events-timeline">
+                <div class="empty-state">No events yet</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

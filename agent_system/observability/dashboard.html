@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperAgent Observability Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0e27;
+            color: #e0e6ed;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #61dafb;
+        }
+
+        .connection-status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .status-connected {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #ef4444;
+            color: white;
+        }
+
+        .status-connecting {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #61dafb;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 10px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .metric-card {
+            background: #334155;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #61dafb;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e0e6ed;
+        }
+
+        .metric-unit {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-left: 4px;
+        }
+
+        .event-feed {
+            height: 600px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            background: #334155;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid #64748b;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .event-type {
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .event-timestamp {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .event-payload {
+            font-size: 13px;
+            color: #cbd5e1;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .event-payload-key {
+            color: #61dafb;
+        }
+
+        /* Event type colors */
+        .event-task_queued { border-left-color: #3b82f6; }
+        .event-task_queued .event-type { color: #3b82f6; }
+
+        .event-agent_started { border-left-color: #10b981; }
+        .event-agent_started .event-type { color: #10b981; }
+
+        .event-agent_completed { border-left-color: #8b5cf6; }
+        .event-agent_completed .event-type { color: #8b5cf6; }
+
+        .event-validation_complete { border-left-color: #ec4899; }
+        .event-validation_complete .event-type { color: #ec4899; }
+
+        .event-hitl_escalated { border-left-color: #f59e0b; }
+        .event-hitl_escalated .event-type { color: #f59e0b; }
+
+        .event-budget_warning { border-left-color: #f59e0b; }
+        .event-budget_warning .event-type { color: #f59e0b; }
+
+        .event-budget_exceeded { border-left-color: #ef4444; }
+        .event-budget_exceeded .event-type { color: #ef4444; }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+        .clear-button {
+            background: #64748b;
+        }
+
+        .clear-button:hover {
+            background: #475569;
+        }
+
+        /* Scrollbar styling */
+        .event-feed::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .event-feed::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        .event-feed::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        .event-feed::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .no-events {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SuperAgent Observability Dashboard</h1>
+        <div id="connectionStatus" class="connection-status status-disconnected">
+            ● Disconnected
+        </div>
+
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button class="clear-button" onclick="clearEvents()">Clear Events</button>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="panel">
+                <h2>Live Event Feed</h2>
+                <div class="event-feed" id="eventFeed">
+                    <div class="no-events">Waiting for events...</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Real-Time Metrics</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Events Received</div>
+                        <div class="metric-value">
+                            <span id="metricEventsReceived">0</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Active Tasks</div>
+                        <div class="metric-value">
+                            <span id="metricActiveTasks">0</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Total Cost</div>
+                        <div class="metric-value">
+                            $<span id="metricTotalCost">0.00</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Validation Pass Rate</div>
+                        <div class="metric-value">
+                            <span id="metricPassRate">0</span><span class="metric-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Critic Rejection Rate</div>
+                        <div class="metric-value">
+                            <span id="metricRejectionRate">0</span><span class="metric-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Avg. Completion Time</div>
+                        <div class="metric-value">
+                            <span id="metricAvgTime">0</span><span class="metric-unit">s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let eventsReceived = 0;
+        let totalCost = 0;
+        let validationTotal = 0;
+        let validationPassed = 0;
+        let criticTotal = 0;
+        let criticRejected = 0;
+        let completionTimes = [];
+        let activeTasks = new Set();
+
+        function connect() {
+            const status = document.getElementById('connectionStatus');
+            status.textContent = '● Connecting...';
+            status.className = 'connection-status status-connecting';
+
+            ws = new WebSocket('ws://localhost:3010');
+
+            ws.onopen = () => {
+                status.textContent = '● Connected';
+                status.className = 'connection-status status-connected';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                console.log('Connected to event stream');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleEvent(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                status.textContent = '● Connection Error';
+                status.className = 'connection-status status-disconnected';
+            };
+
+            ws.onclose = () => {
+                status.textContent = '● Disconnected';
+                status.className = 'connection-status status-disconnected';
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                console.log('Disconnected from event stream');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function handleEvent(event) {
+            // Skip connection_established event
+            if (event.event_type === 'connection_established') {
+                return;
+            }
+
+            eventsReceived++;
+            updateMetric('metricEventsReceived', eventsReceived);
+
+            // Add to feed
+            addEventToFeed(event);
+
+            // Update metrics based on event type
+            const payload = event.payload || {};
+
+            switch (event.event_type) {
+                case 'task_queued':
+                    if (payload.task_id) {
+                        activeTasks.add(payload.task_id);
+                        updateMetric('metricActiveTasks', activeTasks.size);
+                    }
+                    break;
+
+                case 'agent_completed':
+                    if (payload.cost_usd) {
+                        totalCost += payload.cost_usd;
+                        updateMetric('metricTotalCost', totalCost.toFixed(2));
+                    }
+                    if (payload.status === 'rejected') {
+                        criticRejected++;
+                        criticTotal++;
+                    } else if (payload.status === 'approved') {
+                        criticTotal++;
+                    }
+                    if (criticTotal > 0) {
+                        const rejectionRate = (criticRejected / criticTotal * 100).toFixed(0);
+                        updateMetric('metricRejectionRate', rejectionRate);
+                    }
+                    break;
+
+                case 'validation_complete':
+                    validationTotal++;
+                    if (payload.cost) {
+                        totalCost += payload.cost;
+                        updateMetric('metricTotalCost', totalCost.toFixed(2));
+                    }
+                    if (payload.result && payload.result.test_passed) {
+                        validationPassed++;
+                    }
+                    if (validationTotal > 0) {
+                        const passRate = (validationPassed / validationTotal * 100).toFixed(0);
+                        updateMetric('metricPassRate', passRate);
+                    }
+                    if (payload.task_id) {
+                        activeTasks.delete(payload.task_id);
+                        updateMetric('metricActiveTasks', activeTasks.size);
+                    }
+                    if (payload.duration_ms) {
+                        completionTimes.push(payload.duration_ms / 1000);
+                        const avgTime = (completionTimes.reduce((a, b) => a + b, 0) / completionTimes.length).toFixed(1);
+                        updateMetric('metricAvgTime', avgTime);
+                    }
+                    break;
+            }
+        }
+
+        function addEventToFeed(event) {
+            const feed = document.getElementById('eventFeed');
+
+            // Remove "no events" message
+            const noEvents = feed.querySelector('.no-events');
+            if (noEvents) {
+                noEvents.remove();
+            }
+
+            const eventEl = document.createElement('div');
+            eventEl.className = `event-item event-${event.event_type}`;
+
+            const timestamp = new Date(event.timestamp * 1000).toLocaleTimeString();
+
+            const payloadHTML = Object.entries(event.payload || {})
+                .map(([key, value]) => {
+                    const valueStr = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
+                    return `<span class="event-payload-key">${key}</span>: ${valueStr}`;
+                })
+                .join('<br>');
+
+            eventEl.innerHTML = `
+                <div class="event-header">
+                    <div class="event-type">${event.event_type}</div>
+                    <div class="event-timestamp">${timestamp}</div>
+                </div>
+                <div class="event-payload">${payloadHTML || 'No payload'}</div>
+            `;
+
+            feed.insertBefore(eventEl, feed.firstChild);
+
+            // Keep only last 50 events
+            while (feed.children.length > 50) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+
+        function updateMetric(id, value) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value;
+            }
+        }
+
+        function clearEvents() {
+            const feed = document.getElementById('eventFeed');
+            feed.innerHTML = '<div class="no-events">Events cleared. Waiting for new events...</div>';
+        }
+
+        // Auto-connect on load
+        window.addEventListener('load', () => {
+            console.log('Dashboard loaded. Click "Connect" to start receiving events.');
+        });
+    </script>
+</body>
+</html>
