@@ -1,0 +1,97 @@
+version: 1
+
+events:
+  - on: "task_queued"
+    emit:
+      - task_id
+      - feature
+      - est_cost
+      - timestamp
+
+  - on: "agent_started"
+    emit:
+      - agent
+      - task_id
+      - model
+      - tools
+
+  - on: "agent_completed"
+    emit:
+      - agent
+      - task_id
+      - status
+      - duration_ms
+      - cost_usd
+
+  - on: "validation_complete"
+    emit:
+      - task_id
+      - result
+      - cost
+      - duration_ms
+      - screenshots
+
+  - on: "hitl_escalated"
+    emit:
+      - task_id
+      - attempts
+      - last_error
+      - priority
+
+  - on: "budget_warning"
+    emit:
+      - current_spend
+      - limit
+      - remaining
+
+  - on: "budget_exceeded"
+    emit:
+      - current_spend
+      - limit
+      - tasks_blocked
+
+destinations:
+  - type: "websocket"
+    url: "ws://localhost:3010/agent-events"
+    enabled: true
+
+  - type: "console"
+    level: "info"
+    enabled: true
+
+  - type: "file"
+    path: "logs/agent-events.jsonl"
+    enabled: true
+
+metrics:
+  track:
+    - agent_utilization
+    - cost_per_feature
+    - average_retry_count
+    - critic_rejection_rate
+    - validation_pass_rate
+    - time_to_completion
+
+  aggregate:
+    window_minutes: 60
+    buckets:
+      - hourly
+      - daily
+      - weekly
+
+alerts:
+  - condition: "critic_rejection_rate > 0.50"
+    action: "notify_admin"
+    message: "Critic rejecting >50% of tests - check test quality"
+
+  - condition: "validation_pass_rate < 0.70"
+    action: "notify_admin"
+    message: "Validation pass rate <70% - investigate failures"
+
+  - condition: "cost_per_feature > 1.00"
+    action: "warn_user"
+    message: "Cost per feature exceeding $1.00 - review complexity"
+
+  - condition: "average_retry_count > 2.0"
+    action: "notify_admin"
+    message: "High retry rate - check medic effectiveness"

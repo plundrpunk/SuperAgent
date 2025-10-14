@@ -1,0 +1,44 @@
+{
+  "mcpServers": {
+    "archon": {
+      "type": "http",
+      "url": "http://localhost:8051/mcp"
+    },
+    "mcp-server-fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ]
+    },
+    "server-filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/rutledge/Desktop",
+        "/Users/rutledge/Documents/DevFolder"
+      ]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=pxgxcrplrjvdsctrldvw"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_2d785e5c1f9e427e4171c3ff6f35000b94291441"
+      }
+    },
+    "server-brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "BSAjfepygtkdkofw7NQZLwbTG6nShi-"
+      }
+    }
+  }
+}

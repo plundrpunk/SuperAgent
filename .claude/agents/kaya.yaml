@@ -1,0 +1,24 @@
+name: kaya
+role: Router/Orchestrator
+model: claude-haiku
+fallback_model: claude-sonnet-4.5  # For complex planning
+tools: []  # Pure router, no tools
+
+description: |
+  Kaya is the orchestration layer that:
+  - Parses voice intent from user commands
+  - Routes tasks to appropriate specialist agents
+  - Aggregates results from multiple agents
+  - Reports status updates to user
+
+success_criteria:
+  - Correct routing decisions based on task complexity
+  - Clear, concise status updates
+  - Proper error handling and escalation
+
+routing_logic:
+  - Analyze task description and extract key attributes
+  - Estimate complexity using complexity_estimator
+  - Match to routing policy rules
+  - Select appropriate agent + model combination
+  - Track cost and enforce budget limits

@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HITL Queue Schema",
+  "description": "Schema for Human-in-the-Loop escalation queue",
+  "type": "object",
+  "required": [
+    "task_id",
+    "feature",
+    "code_path",
+    "logs_path",
+    "screenshots",
+    "attempts",
+    "last_error",
+    "priority",
+    "created_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Unique task identifier"
+    },
+    "feature": {
+      "type": "string",
+      "description": "Feature being tested"
+    },
+    "code_path": {
+      "type": "string",
+      "description": "Path to test file"
+    },
+    "logs_path": {
+      "type": "string",
+      "description": "Path to execution logs"
+    },
+    "screenshots": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Paths to screenshots"
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of fix attempts made"
+    },
+    "last_error": {
+      "type": "string",
+      "description": "Most recent error message"
+    },
+    "priority": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Priority score (0-1, higher = more urgent)"
+    },
+    "root_cause_category": {
+      "type": "string",
+      "enum": [
+        "selector_flaky",
+        "timing_race_condition",
+        "data_dependency",
+        "environment_config",
+        "api_contract_changed",
+        "browser_compatibility",
+        "authentication_issue",
+        "unknown"
+      ],
+      "description": "Root cause category (filled by human)"
+    },
+    "fix_strategy": {
+      "type": "string",
+      "enum": [
+        "update_selectors",
+        "add_explicit_waits",
+        "mock_external_api",
+        "fix_test_data",
+        "update_assertions",
+        "refactor_test_logic",
+        "report_bug",
+        "other"
+      ],
+      "description": "Recommended fix strategy (filled by human)"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Issue severity (filled by human)"
+    },
+    "human_notes": {
+      "type": "string",
+      "description": "Human annotations and observations"
+    },
+    "patch_diff": {
+      "type": "string",
+      "description": "Patch/diff applied by human"
+    },
+    "resolved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether issue has been resolved"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when added to queue"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when resolved"
+    }
+  }
+}

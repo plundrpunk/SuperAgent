@@ -1,0 +1,68 @@
+version: 1
+
+routing:
+  - task: write_test
+    complexity: easy
+    agent: scribe
+    model: haiku
+    reason: "Simple CRUD/visible UI path"
+
+  - task: write_test
+    complexity: hard
+    agent: scribe
+    model: sonnet
+    reason: "Multi-step flows, async, auth, edge cases"
+
+  - task: execute_test
+    complexity: any
+    agent: runner
+    model: haiku
+    reason: "Test execution is straightforward"
+
+  - task: fix_bug
+    complexity: any
+    agent: medic
+    model: sonnet
+    reason: "Bug fixing requires deep reasoning"
+
+  - task: pre_validate
+    complexity: any
+    agent: critic
+    model: haiku
+    reason: "Quick quality checks before validation"
+
+  - task: validate
+    complexity: any
+    agent: gemini
+    model: 2.5_pro
+    reason: "Real browser validation with visual evidence"
+
+cost_targets:
+  use_haiku_ratio: 0.7
+  max_cost_per_feature_usd: 0.50
+
+cost_overrides:
+  critical_paths:
+    - pattern: "**/auth/**/*.spec.ts"
+      max_cost_usd: 2.00
+      reason: "Authentication is critical infrastructure"
+
+    - pattern: "**/payment/**/*.spec.ts"
+      max_cost_usd: 3.00
+      reason: "Payment flows require thorough validation"
+
+    - pattern: "**/admin/**/*.spec.ts"
+      max_cost_usd: 1.50
+      reason: "Admin features affect all users"
+
+fallbacks:
+  critic_fail: "return_to_scribe"
+  validation_timeout: "retry_runner_then_medic"
+  medic_escalation: "queue_for_hitl"
+  max_retries: 3
+
+budget_enforcement:
+  soft_limit_warning: 0.80  # Warn at 80% of budget
+  hard_limit_stop: 1.00     # Stop at 100% of budget
+  daily_budget_usd: 50.00
+  per_session_budget_usd: 5.00

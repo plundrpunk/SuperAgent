@@ -1,0 +1,122 @@
+version: 1
+
+permissions:
+  scribe: [read, write, edit, grep, glob]
+  runner: [bash, read, grep]
+  medic:  [read, edit, bash, grep]
+  critic: [read, grep]
+  gemini: [validate]
+
+tools:
+  read:
+    description: Read files or directories
+    params:
+      path:
+        type: string
+        required: true
+    returns:
+      content:
+        type: string
+    security:
+      allowed_agents: [scribe, runner, medic, critic]
+    timeout_s: 2
+
+  write:
+    description: Create a file
+    params:
+      path:
+        type: string
+        required: true
+      content:
+        type: string
+        required: true
+    returns:
+      ok:
+        type: boolean
+    security:
+      allowed_agents: [scribe]
+      validate_path: true  # No writes outside project
+    timeout_s: 2
+
+  edit:
+    description: Apply patch to file
+    params:
+      path:
+        type: string
+        required: true
+      patch:
+        type: string
+        required: true
+    returns:
+      ok:
+        type: boolean
+    security:
+      allowed_agents: [scribe, medic]
+      validate_path: true
+    timeout_s: 5
+
+  grep:
+    description: Search file contents
+    params:
+      pattern:
+        type: string
+        required: true
+      path:
+        type: string
+        required: false
+    returns:
+      matches:
+        type: array
+    security:
+      allowed_agents: [scribe, runner, medic, critic]
+    timeout_s: 5
+
+  glob:
+    description: Find files by pattern
+    params:
+      pattern:
+        type: string
+        required: true
+    returns:
+      files:
+        type: array
+    security:
+      allowed_agents: [scribe]
+    timeout_s: 2
+
+  bash:
+    description: Execute command in sandbox
+    params:
+      cmd:
+        type: string
+        required: true
+    returns:
+      stdout:
+        type: string
+      stderr:
+        type: string
+      code:
+        type: integer
+    security:
+      allowed_agents: [runner, medic]
+      sandboxed: true
+      blocked_commands: [rm -rf, sudo, curl, wget]
+    timeout_s: 60
+
+  validate:
+    description: Real browser validation via Gemini
+    params:
+      test_path:
+        type: string
+        required: true
+      timeout_ms:
+        type: integer
+        required: false
+        default: 45000
+    returns:
+      result_json:
+        type: object
+    security:
+      allowed_agents: [gemini]
+      rate_limit: 10_per_minute
+    timeout_s: 45

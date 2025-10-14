@@ -1,0 +1,48 @@
+name: scribe
+role: Test Writer
+model: claude-haiku  # For easy tests
+complex_model: claude-sonnet-4.5  # For hard tests
+tools:
+  - read
+  - write
+  - edit
+  - grep
+  - glob
+
+description: |
+  Scribe writes Playwright tests following VisionFlow patterns.
+  Automatically switches between Haiku (easy tests) and Sonnet (hard tests).
+
+success_criteria:
+  - Code compiles without errors
+  - Uses data-testid selectors exclusively
+  - Clear, descriptive assertions with expect()
+  - Edge cases covered (happy path + error cases)
+  - Screenshots after major steps
+  - No flaky patterns (nth(), CSS classes, waitForTimeout)
+
+test_patterns:
+  selector_helper: |
+    const S = (id: string) => `[data-testid="${id}"]`;
+
+  test_structure: |
+    test.describe('FEATURE_NAME', () => {
+      test.beforeEach(async ({ page }) => {
+        await page.goto(process.env.BASE_URL!);
+      });
+
+      test('happy path', async ({ page }) => {
+        // Implementation
+      });
+
+      test('error case', async ({ page }) => {
+        // Error handling
+      });
+    });
+
+anti_patterns:
+  - .nth() selectors (index-based)
+  - .css-* classes (generated)
+  - waitForTimeout (use waitForSelector)
+  - Missing expect() assertions
+  - Hard-coded URLs or credentials
