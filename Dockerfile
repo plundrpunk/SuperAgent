@@ -19,8 +19,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy and install Python dependencies
 COPY requirements.txt .
+
+# Install core dependencies first (without heavy ML packages)
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --user -r requirements.txt
+    grep -v 'sentence-transformers\|chromadb' requirements.txt > requirements-core.txt && \
+    pip install --no-cache-dir --user -r requirements-core.txt
+
+# Install ML dependencies separately with proper configuration
+RUN pip install --no-cache-dir --user \
+    torch==2.1.0 \
+    sentence-transformers>=2.2,<3.0 \
+    chromadb>=0.4,<1.0
 
 
 # ==============================================================================
@@ -29,6 +38,13 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 FROM node:18-slim AS node-builder
 
 WORKDIR /build/voice
+
+# Install Python and build dependencies for native modules (speaker package)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    build-essential \
+    libasound2-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy voice integration package files
 COPY agent_system/voice/package*.json ./

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperAgent Observability Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #00ff00;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+        }
+        .status {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        .status.connected {
+            border-color: #00ff00;
+        }
+        .status.disconnected {
+            border-color: #ff0000;
+            color: #ff0000;
+        }
+        .events {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .event {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #0f0f0f;
+            border-left: 3px solid #00ff00;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .event .timestamp {
+            color: #666;
+            font-size: 11px;
+        }
+        .event .agent {
+            color: #00aaff;
+            font-weight: bold;
+        }
+        .event .status {
+            color: #ffaa00;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        .metric-card h3 {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .metric-card .value {
+            font-size: 28px;
+            color: #00ff00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 SuperAgent Observability Dashboard</h1>
+
+        <div class="status" id="ws-status">
+            <strong>WebSocket:</strong> <span id="connection-status">Connecting...</span>
+        </div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <h3>Total Events</h3>
+                <div class="value" id="total-events">0</div>
+            </div>
+            <div class="metric-card">
+                <h3>Active Agents</h3>
+                <div class="value" id="active-agents">0</div>
+            </div>
+            <div class="metric-card">
+                <h3>Total Cost</h3>
+                <div class="value" id="total-cost">$0.00</div>
+            </div>
+            <div class="metric-card">
+                <h3>Success Rate</h3>
+                <div class="value" id="success-rate">100%</div>
+            </div>
+        </div>
+
+        <h2 style="margin-bottom: 15px; color: #00ff00; font-size: 18px;">📊 Live Event Stream</h2>
+        <div class="events" id="events-container">
+            <div class="event">
+                <div class="timestamp">Waiting for events...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let events = [];
+        let totalCost = 0;
+        let activeAgents = new Set();
+
+        function connectWebSocket() {
+            const wsUrl = 'ws://localhost:3010/agent-events';
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    document.getElementById('connection-status').textContent = 'Connected ✓';
+                    document.getElementById('ws-status').classList.add('connected');
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        addEvent(data);
+                        updateMetrics(data);
+                    } catch (e) {
+                        console.error('Failed to parse event:', e);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    document.getElementById('connection-status').textContent = 'Error ✗';
+                    document.getElementById('ws-status').classList.remove('connected');
+                    document.getElementById('ws-status').classList.add('disconnected');
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    document.getElementById('connection-status').textContent = 'Disconnected (retry in 5s)';
+                    document.getElementById('ws-status').classList.remove('connected');
+                    document.getElementById('ws-status').classList.add('disconnected');
+
+                    // Retry connection after 5 seconds
+                    setTimeout(connectWebSocket, 5000);
+                };
+            } catch (e) {
+                console.error('Failed to create WebSocket:', e);
+                document.getElementById('connection-status').textContent = 'Failed to connect';
+                document.getElementById('ws-status').classList.add('disconnected');
+            }
+        }
+
+        function addEvent(data) {
+            events.push(data);
+
+            const container = document.getElementById('events-container');
+            const eventEl = document.createElement('div');
+            eventEl.className = 'event';
+
+            const timestamp = new Date().toLocaleTimeString();
+            eventEl.innerHTML = `
+                <div class="timestamp">${timestamp}</div>
+                <div><span class="agent">${data.agent || 'system'}</span> - <span class="status">${data.status || data.event_type}</span></div>
+                <div>${JSON.stringify(data, null, 2)}</div>
+            `;
+
+            container.insertBefore(eventEl, container.firstChild);
+
+            // Keep only last 50 events
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+
+            document.getElementById('total-events').textContent = events.length;
+        }
+
+        function updateMetrics(data) {
+            if (data.agent) {
+                activeAgents.add(data.agent);
+                document.getElementById('active-agents').textContent = activeAgents.size;
+            }
+
+            if (data.cost) {
+                totalCost += parseFloat(data.cost);
+                document.getElementById('total-cost').textContent = `$${totalCost.toFixed(4)}`;
+            }
+
+            // Calculate success rate
+            const successful = events.filter(e => e.status === 'success' || e.status === 'completed').length;
+            const rate = events.length > 0 ? (successful / events.length * 100).toFixed(1) : 100;
+            document.getElementById('success-rate').textContent = `${rate}%`;
+        }
+
+        // Connect on page load
+        connectWebSocket();
+    </script>
+</body>
+</html>

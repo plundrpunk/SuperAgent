@@ -32,7 +32,7 @@ success_criteria:
 contracts:
   browser:
     timeout_ms: 45000
-    headless: true
+    headless: false  # Visible browsers so you can watch tests run!
     screenshot: "on"
     video: "retain-on-failure"
     trace: "retain-on-failure"

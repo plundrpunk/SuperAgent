@@ -1,0 +1,20 @@
+#!/bin/bash
+# SuperAgent Kaya - Ultra-simple wrapper
+# Usage: kaya "your command here"
+
+cd /Users/rutledge/Documents/DevFolder/SuperAgent 2>/dev/null || {
+    echo "Error: SuperAgent directory not found"
+    exit 1
+}
+
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv venv
+fi
+
+source venv/bin/activate
+export PYTHONPATH=$PWD
+export REDIS_HOST=localhost
+
+# Direct execution
+PYTHONPATH=$PWD venv/bin/python agent_system/cli.py kaya "$@"

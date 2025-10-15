@@ -7,6 +7,10 @@ import sys
 import argparse
 from pathlib import Path
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -54,6 +58,7 @@ def sanitize_test_path(path: str) -> str:
         project_root / 'tests',
         project_root / 'artifacts',
         project_root / 'test-results',
+        Path('/Users/rutledge/Documents/DevFolder/Cloppy_Ai'),  # Allow Cloppy_AI project
     ]
 
     for allowed_dir in allowed_dirs:
@@ -96,6 +101,7 @@ def main():
     """Main CLI entry point."""
     # Set up lifecycle management with signal handlers
     lifecycle = setup_lifecycle()
+    lifecycle.mark_started()
 
     parser = argparse.ArgumentParser(description='SuperAgent - Voice-Controlled Multi-Agent Testing System')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')

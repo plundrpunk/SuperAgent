@@ -1,0 +1,27 @@
+# Shell Alias for Easy Access
+
+Add this to your ~/.zshrc or ~/.bashrc:
+
+# SuperAgent Kaya - Use from anywhere!
+alias kaya='cd /Users/rutledge/Documents/DevFolder/SuperAgent && ./kaya'
+
+Then reload your shell:
+source ~/.zshrc
+
+Now you can run from ANY directory:
+kaya "fix all test failures"
+
+---
+
+# Optional: Add to PATH instead
+
+Add this line to ~/.zshrc:
+export PATH="/Users/rutledge/Documents/DevFolder/SuperAgent:$PATH"
+
+Then reload:
+source ~/.zshrc
+
+Now you can run:
+kaya "write a test for login"
+
+From ANY directory!

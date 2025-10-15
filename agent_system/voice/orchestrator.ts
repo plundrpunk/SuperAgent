@@ -328,12 +328,22 @@ Example responses:
           this.handleTranscriptionCompleted(message);
           break;
 
+        // New API format - audio data
         case 'response.audio.delta':
           this.handleAudioDelta(message);
           break;
 
         case 'response.audio.done':
           this.handleAudioDone(message);
+          break;
+
+        // New API format - text transcript of audio
+        case 'response.audio_transcript.delta':
+          this.handleAudioTranscriptDelta(message);
+          break;
+
+        case 'response.audio_transcript.done':
+          this.handleAudioTranscriptDone(message);
           break;
 
         case 'response.text.delta':
@@ -350,6 +360,16 @@ Example responses:
 
         case 'error':
           this.handleError(message);
+          break;
+
+        // Silently ignore these info messages
+        case 'rate_limits.updated':
+        case 'response.created':
+        case 'response.output_item.added':
+        case 'response.content_part.added':
+        case 'response.content_part.done':
+        case 'response.output_item.done':
+          // These are informational, no action needed
           break;
 
         default:
@@ -437,6 +457,19 @@ Example responses:
     const fullAudio = Buffer.concat(this.outputAudioBuffer);
     this.outputAudioBuffer = [];
     this.emit('audio_complete', fullAudio);
+  }
+
+  private handleAudioTranscriptDelta(message: any): void {
+    if (message.delta) {
+      // Show what Kaya is saying as text
+      this.emit('text_delta', message.delta);
+    }
+  }
+
+  private handleAudioTranscriptDone(message: any): void {
+    if (message.transcript) {
+      this.emit('text_complete', message.transcript);
+    }
   }
 
   private handleTextDelta(message: any): void {
@@ -730,49 +763,54 @@ Example responses:
    */
   private async executeKayaCommand(command: string, intent?: VoiceIntent): Promise<KayaResult> {
     return new Promise((resolve, reject) => {
+      const venvPython = '/Users/rutledge/Documents/DevFolder/SuperAgent/venv/bin/python';
       const kayaPath = '/Users/rutledge/Documents/DevFolder/SuperAgent/agent_system/cli.py';
+      const projectDir = '/Users/rutledge/Documents/DevFolder/SuperAgent';
 
-      // Build command args with intent data
-      const args = ['kaya', command];
-      if (intent) {
-        args.push('--intent-type', intent.type);
-        args.push('--intent-slots', JSON.stringify(intent.slots));
-      }
+      // Build command args - just pass the command, let Kaya parse intent
+      const args = [kayaPath, 'kaya', command];
 
-      // Spawn Kaya process
-      const process = spawn('python3', [kayaPath, ...args]);
+      // Spawn Kaya process with venv Python and PYTHONPATH
+      const kayaProcess = spawn(venvPython, args, {
+        cwd: projectDir,
+        env: { ...process.env, PYTHONPATH: projectDir }
+      });
 
       let stdout = '';
       let stderr = '';
 
-      process.stdout.on('data', (data) => {
+      kayaProcess.stdout.on('data', (data: Buffer) => {
         stdout += data.toString();
       });
 
-      process.stderr.on('data', (data) => {
+      kayaProcess.stderr.on('data', (data: Buffer) => {
         stderr += data.toString();
       });
 
-      process.on('close', (code) => {
+      kayaProcess.on('close', (code: number | null) => {
         if (code !== 0) {
-          reject(new Error(`Kaya process exited with code ${code}: ${stderr}`));
+          const errorMsg = stderr || stdout || 'Unknown error';
+          console.error('[Voice] Kaya process error:', errorMsg);
+          reject(new Error(`Kaya failed: ${errorMsg}`));
           return;
         }
 
         try {
+          console.log('[Voice] Kaya output:', stdout);
           // Parse Kaya output
           const result = this.parseKayaOutput(stdout, intent);
           resolve(result);
         } catch (error) {
+          console.error('[Voice] Failed to parse Kaya output:', error);
           reject(error);
         }
       });
 
-      // Timeout after 30 seconds
+      // Timeout after 3 minutes (test creation can take time)
       setTimeout(() => {
-        process.kill();
-        reject(new Error('Kaya command timeout'));
-      }, 30000);
+        kayaProcess.kill();
+        reject(new Error('Kaya command timeout after 3 minutes'));
+      }, 180000);
     });
   }
 

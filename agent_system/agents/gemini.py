@@ -206,19 +206,30 @@ class GeminiAgent(BaseAgent):
         execution_start = time.time()
 
         try:
+            # Get browser config from YAML
+            browser_config = self.config.get('contracts', {}).get('browser', {})
+            headless = browser_config.get('headless', True)
+
             # Run Playwright test with JSON reporter
             env = {
                 **subprocess.os.environ.copy(),
                 'PWTEST_SKIP_TEST_OUTPUT': '1'
             }
 
+            # Build Playwright command
+            playwright_args = [
+                'npx', 'playwright', 'test',
+                test_path,
+                '--reporter=json',
+                '--timeout', str(self.max_test_duration_ms)
+            ]
+
+            # Add headed mode if configured
+            if not headless:
+                playwright_args.append('--headed')
+
             result = subprocess.run(
-                [
-                    'npx', 'playwright', 'test',
-                    test_path,
-                    '--reporter=json',
-                    '--timeout', str(self.max_test_duration_ms)
-                ],
+                playwright_args,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -247,6 +258,16 @@ class GeminiAgent(BaseAgent):
 
             # Collect screenshots from artifacts directory
             screenshots = self._collect_screenshots(artifacts_dir, test_path)
+
+            # Broadcast screenshot events for dashboard streaming
+            for i, screenshot_path in enumerate(screenshots):
+                self.event_emitter.emit('screenshot_captured', {
+                    'test_path': test_path,
+                    'screenshot_path': screenshot_path,
+                    'screenshot_number': i + 1,
+                    'total_screenshots': len(screenshots),
+                    'timestamp': time.time()
+                })
 
             # Calculate execution time
             execution_time_ms = int((time.time() - execution_start) * 1000)

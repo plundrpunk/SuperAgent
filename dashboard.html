@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SuperAgent Dashboard</title>
+    <style>
+        body { background: #0a0e1a; color: #e0e0e0; font-family: monospace; padding: 20px; }
+        header { background: linear-gradient(135deg, #00b0ff 0%, #005c99 100%); padding: 30px; border-radius: 10px; margin-bottom: 20px; }
+        h1 { color: white; margin: 0 0 10px 0; }
+        .status { display: flex; align-items: center; gap: 10px; }
+        .indicator { width: 12px; height: 12px; border-radius: 50%; background: #ff4444; }
+        .indicator.connected { background: #44ff44; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat { background: #1a1f35; padding: 20px; border-radius: 8px; border-left: 4px solid #00b0ff; }
+        .stat-label { color: #999; font-size: 0.9em; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #00b0ff; margin-top: 5px; }
+        .events { background: #1a1f35; border-radius: 8px; padding: 20px; max-height: 600px; overflow-y: auto; }
+        .event { background: #0f1420; border-left: 4px solid #00b0ff; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .event-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .event-type { font-weight: bold; color: #00b0ff; }
+        .event-time { color: #999; font-size: 0.9em; }
+        .event-payload { background: #0a0e1a; padding: 10px; border-radius: 4px; font-size: 0.85em; }
+        pre { margin: 0; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>💀 SuperAgent Dashboard</h1>
+        <div class="status">
+            <div class="indicator" id="status"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </header>
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-label">Total Events</div>
+            <div class="stat-value" id="total">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Active Tasks</div>
+            <div class="stat-value" id="active">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Total Cost</div>
+            <div class="stat-value" id="cost">$0.00</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Success Rate</div>
+            <div class="stat-value" id="success">100%</div>
+        </div>
+    </div>
+    <div class="events">
+        <h2 style="margin:0 0 15px 0;color:#00b0ff">📡 Live Events</h2>
+        <div id="events">Waiting for events...</div>
+    </div>
+    <div class="events" style="margin-top:20px">
+        <h2 style="margin:0 0 15px 0;color:#00b0ff">📸 Live Screenshots</h2>
+        <div id="screenshots" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:15px">
+            <div style="color:#999;grid-column:1/-1">No screenshots yet...</div>
+        </div>
+    </div>
+    <script>
+        let ws, events = [], cost = 0, tasks = new Set(), succ = 0, fail = 0, screenshots = [];
+        function connect() {
+            ws = new WebSocket('ws://localhost:3010/agent-events');
+            ws.onopen = () => {
+                document.getElementById('status').classList.add('connected');
+                document.getElementById('statusText').textContent = 'Connected';
+            };
+            ws.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if (d.event_type === 'connection_established') return;
+
+                // Handle screenshot events
+                if (d.event_type === 'screenshot_captured') {
+                    screenshots.unshift(d.payload);
+                    renderScreenshots();
+                }
+
+                events.unshift(d);
+                document.getElementById('total').textContent = events.length;
+                if (d.event_type === 'task_queued') tasks.add(d.payload.task_id);
+                if (d.event_type === 'agent_completed') {
+                    tasks.delete(d.payload.task_id);
+                    if (d.payload.status === 'success') succ++; else fail++;
+                    document.getElementById('success').textContent = ((succ/(succ+fail||1)*100).toFixed(1))+'%';
+                }
+                document.getElementById('active').textContent = tasks.size;
+                if (d.payload?.cost_usd) cost += d.payload.cost_usd;
+                if (d.payload?.cost) cost += d.payload.cost;
+                document.getElementById('cost').textContent = '$'+cost.toFixed(4);
+                document.getElementById('events').innerHTML = events.slice(0,30).map(ev =>
+                    `<div class="event">
+                        <div class="event-header">
+                            <span class="event-type">${ev.event_type}</span>
+                            <span class="event-time">${new Date(ev.timestamp*1000).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="event-payload"><pre>${JSON.stringify(ev.payload,null,2)}</pre></div>
+                    </div>`
+                ).join('');
+            };
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+            };
+            ws.onclose = () => {
+                document.getElementById('status').classList.remove('connected');
+                document.getElementById('statusText').textContent = 'Reconnecting...';
+                console.log('WebSocket closed, reconnecting in 3s...');
+                setTimeout(connect, 3000);
+            };
+        }
+
+        function renderScreenshots() {
+            const container = document.getElementById('screenshots');
+            if (screenshots.length === 0) {
+                container.innerHTML = '<div style="color:#999;grid-column:1/-1">No screenshots yet...</div>';
+                return;
+            }
+            container.innerHTML = screenshots.slice(0, 12).map(s => {
+                // Convert absolute path to HTTP URL
+                // e.g., /Users/.../artifacts/test/shot.png -> /artifacts/test/shot.png
+                const httpPath = s.screenshot_path.includes('/artifacts/')
+                    ? s.screenshot_path.substring(s.screenshot_path.indexOf('/artifacts/'))
+                    : s.screenshot_path;
+
+                return `<div style="background:#0f1420;border-radius:8px;padding:10px;border:2px solid #667eea">
+                    <div style="color:#667eea;font-weight:bold;margin-bottom:8px">
+                        ${s.screenshot_number}/${s.total_screenshots}
+                    </div>
+                    <img src="${httpPath}" style="width:100%;border-radius:4px;display:block"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
+                         alt="Screenshot">
+                    <div style="display:none;color:#ff4444;font-size:0.85em;margin-top:8px">
+                        Failed to load screenshot
+                    </div>
+                    <div style="color:#999;font-size:0.85em;margin-top:8px;word-break:break-all">
+                        ${s.test_path.split('/').pop()}
+                    </div>
+                    <div style="color:#666;font-size:0.75em;margin-top:4px">
+                        ${new Date(s.timestamp*1000).toLocaleTimeString()}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        connect();
+    </script>
+</body>
+</html>

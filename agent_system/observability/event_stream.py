@@ -571,7 +571,7 @@ class EventEmitter:
         self._running = False
 
     async def start(self):
-        """Start the event emitter (WebSocket server if enabled)."""
+        """Start the event emitter (WebSocket server and Redis subscriber if enabled)."""
         self._running = True
         self.loop = asyncio.get_event_loop()
 
@@ -586,6 +586,11 @@ class EventEmitter:
             except Exception as e:
                 print(f"{Colors.ERROR}Failed to start WebSocket server: {e}{Colors.RESET}")
                 self.websocket_enabled = False
+
+        # Start Redis subscriber to relay events from other processes
+        if REDIS_AVAILABLE and self.redis_client:
+            asyncio.create_task(self._redis_subscriber())
+            print(f"{Colors.SUCCESS}Redis event subscriber started{Colors.RESET}")
 
     async def stop(self):
         """Stop the event emitter and close all connections gracefully."""
@@ -792,6 +797,62 @@ class EventEmitter:
         # Remove disconnected clients
         self.clients -= disconnected
 
+    async def _redis_subscriber(self):
+        """
+        Subscribe to Redis 'agent-events' channel and relay to WebSocket clients.
+
+        This allows events from other processes (like Kaya CLI) to reach the dashboard.
+        """
+        try:
+            pubsub = self.redis_client.client.pubsub()
+            pubsub.subscribe('agent-events')
+
+            print(f"{Colors.INFO}Subscribed to Redis channel: agent-events{Colors.RESET}")
+
+            while self._running:
+                try:
+                    message = pubsub.get_message(timeout=1.0)
+
+                    if message and message['type'] == 'message':
+                        # Parse event JSON
+                        event_json = message['data'].decode('utf-8') if isinstance(message['data'], bytes) else message['data']
+                        event_dict = json.loads(event_json)
+
+                        # Create Event object
+                        event = Event(
+                            event_type=event_dict['event_type'],
+                            timestamp=event_dict['timestamp'],
+                            payload=event_dict['payload']
+                        )
+
+                        # Emit to all destinations (console, file, WebSocket)
+                        if self.console_enabled:
+                            self._emit_console(event)
+
+                        if self.file_enabled:
+                            self._emit_file(event)
+
+                        if self.websocket_enabled and self.clients:
+                            await self._emit_websocket(event)
+
+                        # Update metrics
+                        self.metrics.process_event(event)
+
+                    await asyncio.sleep(0.01)  # Small delay to prevent busy loop
+
+                except Exception as e:
+                    print(f"{Colors.WARNING}Redis subscriber error: {e}{Colors.RESET}")
+                    await asyncio.sleep(1.0)
+
+        except Exception as e:
+            print(f"{Colors.ERROR}Fatal Redis subscriber error: {e}{Colors.RESET}")
+        finally:
+            try:
+                pubsub.unsubscribe('agent-events')
+                pubsub.close()
+            except:
+                pass
+
     def get_metrics(self) -> Dict[str, float]:
         """
         Get current metrics.
@@ -835,7 +896,11 @@ def get_emitter() -> EventEmitter:
 
 def emit_event(event_type: str, payload: Dict[str, Any]):
     """
-    Convenience function to emit event using global emitter.
+    Convenience function to emit event using global emitter OR Redis pub/sub.
+
+    This function tries TWO approaches:
+    1. If global emitter exists and has event loop -> emit directly
+    2. Otherwise -> publish to Redis for event stream server to pick up
 
     Args:
         event_type: Type of event
@@ -850,7 +915,33 @@ def emit_event(event_type: str, payload: Dict[str, Any]):
         })
     """
     emitter = get_emitter()
-    emitter.emit(event_type, payload)
+
+    # Check if emitter has running event loop
+    if emitter.loop and emitter.loop.is_running():
+        # Emitter is started, emit normally
+        emitter.emit(event_type, payload)
+    else:
+        # Emitter not started - use Redis pub/sub as bridge
+        try:
+            if REDIS_AVAILABLE:
+                from agent_system.state.redis_client import RedisClient
+                redis_client = RedisClient()
+
+                event = Event(
+                    event_type=event_type,
+                    timestamp=time.time(),
+                    payload=payload
+                )
+
+                # Publish to Redis channel
+                redis_client.client.publish('agent-events', event.to_json())
+            else:
+                # No Redis, just log to console
+                emitter.emit(event_type, payload)
+        except Exception as e:
+            # Fallback to console-only emission
+            print(f"{Colors.WARNING}Warning: Could not publish to Redis: {e}{Colors.RESET}")
+            emitter.emit(event_type, payload)
 
 
 # Example usage

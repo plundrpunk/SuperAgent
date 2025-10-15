@@ -63,7 +63,7 @@ class RunnerAgent(BaseAgent):
         Execute Playwright test.
 
         Args:
-            test_path: Path to test file
+            test_path: Path to test file or directory
             timeout: Optional timeout in seconds (default 60s)
             reporter: Optional reporter format ('json', 'tap', 'text', or None for default)
 
@@ -75,17 +75,36 @@ class RunnerAgent(BaseAgent):
         reporter = reporter or self.reporter_format
 
         try:
-            # Build command with reporter
-            cmd = ['npx', 'playwright', 'test', test_path]
+            # Determine working directory and test path
+            test_path_obj = Path(test_path)
+
+            if test_path_obj.is_dir():
+                # If path is a directory, use it as cwd and run all tests
+                cwd = str(test_path_obj)
+                cmd = ['npx', 'playwright', 'test']
+            elif test_path_obj.is_file():
+                # If path is a file, use parent as cwd and pass relative path
+                cwd = str(test_path_obj.parent)
+                cmd = ['npx', 'playwright', 'test', test_path_obj.name]
+            else:
+                # Fallback: assume it's a relative path, use current dir
+                cwd = None
+                cmd = ['npx', 'playwright', 'test', test_path]
+
+            # Add max-failures flag to stop after first failure (faster feedback for Medic)
+            cmd.extend(['--max-failures', '1'])
+
+            # Add reporter
             if reporter and reporter != 'text':
                 cmd.extend(['--reporter', reporter])
 
-            # Run Playwright test
+            # Run Playwright test with proper working directory
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
+                cwd=cwd
             )
 
             # Parse output based on format
@@ -121,11 +140,22 @@ class RunnerAgent(BaseAgent):
                 execution_time_ms=execution_time
             )
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
+            # Tests timed out - run diagnostics to help Medic fix the issue
+            diagnostics = self._run_diagnostics(test_path, timeout)
+
             return AgentResult(
                 success=False,
-                error=f"Test execution timed out after {timeout}s",
-                data={'status': 'timeout', 'test_path': test_path},
+                error=f"Test execution timed out after {timeout}s. {diagnostics['summary']}",
+                data={
+                    'status': 'timeout',
+                    'test_path': test_path,
+                    'errors': diagnostics['errors'],  # Provide actionable errors for Medic
+                    'diagnostics': diagnostics,
+                    'passed_count': 0,
+                    'failed_count': 0,
+                    'test_results': []
+                },
                 execution_time_ms=self._track_execution(start_time)
             )
         except Exception as e:
@@ -148,6 +178,28 @@ class RunnerAgent(BaseAgent):
         Returns:
             Parsed result dict
         """
+        # Check if stdout is empty or trivial
+        if not stdout or len(stdout.strip()) < 10:
+            # No output produced - likely configuration or environment issue
+            return {
+                'success': False,
+                'status': 'error',
+                'test_results': [],
+                'passed_count': 0,
+                'failed_count': 0,
+                'skipped_count': 0,
+                'errors': [{
+                    'category': 'unknown',
+                    'message': f'Playwright produced no output. Check: 1) Are servers running? 2) Is playwright.config.ts correct? 3) Run manually: npx playwright test --reporter=list. stderr: {stderr[:200] if stderr else "none"}',
+                    'file_path': None,
+                    'line_number': None,
+                    'stack_trace': None
+                }],
+                'console_errors': [],
+                'network_failures': [],
+                'error': 'No test output produced'
+            }
+
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError:
@@ -206,6 +258,17 @@ class RunnerAgent(BaseAgent):
                             stack_trace=stack_trace
                         ))
 
+        # Extract top-level load errors (test file syntax errors, import errors, etc.)
+        for load_error in data.get('errors', []):
+            error_msg = load_error.get('message', '')
+            stack_trace = load_error.get('stack', '')
+            location = load_error.get('location', {})
+
+            categorized_error = self._categorize_error(error_msg, stack_trace)
+            categorized_error.file_path = location.get('file')
+            categorized_error.line_number = location.get('line')
+            all_errors.append(categorized_error)
+
         # Determine overall status
         if returncode == 0 and passed_count > 0:
             status = 'pass'
@@ -215,6 +278,10 @@ class RunnerAgent(BaseAgent):
             status = 'fail'
             success = False
             error = f"{failed_count} test(s) failed"
+        elif len(all_errors) > 0:
+            status = 'error'
+            success = False
+            error = f"{len(all_errors)} load error(s)"
         else:
             status = 'error'
             success = False
@@ -644,3 +711,128 @@ class RunnerAgent(BaseAgent):
                         artifacts['traces'].append(file_str)
 
         return artifacts
+
+    def _run_diagnostics(self, test_path: str, timeout: int) -> Dict[str, Any]:
+        """
+        Run diagnostics when tests timeout to identify root cause.
+
+        Checks:
+        - Are required servers running?
+        - Is Playwright installed?
+        - Are tests configured correctly?
+
+        Args:
+            test_path: Path to test that timed out
+            timeout: Timeout value that was used
+
+        Returns:
+            Dict with diagnostic results and actionable errors
+        """
+        import socket
+
+        errors = []
+        issues = []
+
+        # Check if backend server is running (port 3010)
+        backend_running = self._check_port(3010)
+        if not backend_running:
+            issues.append("Backend server not running on port 3010")
+            errors.append({
+                'category': 'network',
+                'message': 'Backend server (port 3010) is not responding. E2E tests require the backend to be running. Start with: cd backend && pnpm run dev',
+                'file_path': None,
+                'line_number': None,
+                'stack_trace': None
+            })
+
+        # Check if frontend server is running (port 5175)
+        frontend_running = self._check_port(5175)
+        if not frontend_running:
+            issues.append("Frontend server not running on port 5175")
+            errors.append({
+                'category': 'network',
+                'message': 'Frontend server (port 5175) is not responding. E2E tests require the frontend to be running. Start with: cd frontend && pnpm run dev',
+                'file_path': None,
+                'line_number': None,
+                'stack_trace': None
+            })
+
+        # Check if Playwright is installed
+        playwright_installed = self._check_playwright_installed()
+        if not playwright_installed:
+            issues.append("Playwright not installed")
+            errors.append({
+                'category': 'unknown',
+                'message': 'Playwright does not appear to be installed. Run: npx playwright install',
+                'file_path': None,
+                'line_number': None,
+                'stack_trace': None
+            })
+
+        # If no specific issues found, provide general timeout error
+        if not errors:
+            errors.append({
+                'category': 'timeout',
+                'message': f'Tests timed out after {timeout}s with no specific diagnostic issues found. This may indicate slow tests, network latency, or test environment issues.',
+                'file_path': str(test_path),
+                'line_number': None,
+                'stack_trace': None
+            })
+            issues.append(f"Tests exceeded {timeout}s timeout")
+
+        # Build summary
+        if issues:
+            summary = f"Possible causes: {'; '.join(issues)}"
+        else:
+            summary = "No specific diagnostic issues detected"
+
+        return {
+            'summary': summary,
+            'issues': issues,
+            'errors': errors,
+            'checks': {
+                'backend_running': backend_running,
+                'frontend_running': frontend_running,
+                'playwright_installed': playwright_installed
+            }
+        }
+
+    def _check_port(self, port: int, host: str = 'localhost') -> bool:
+        """
+        Check if a port is open/listening.
+
+        Args:
+            port: Port number to check
+            host: Host to check (default localhost)
+
+        Returns:
+            True if port is open, False otherwise
+        """
+        import socket
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        try:
+            result = sock.connect_ex((host, port))
+            sock.close()
+            return result == 0
+        except:
+            return False
+
+    def _check_playwright_installed(self) -> bool:
+        """
+        Check if Playwright is installed.
+
+        Returns:
+            True if Playwright is available, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ['npx', 'playwright', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except:
+            return False

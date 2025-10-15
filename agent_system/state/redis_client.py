@@ -60,6 +60,7 @@ class RedisClient:
             decode_responses=True
         )
         self.client = redis.Redis(connection_pool=self.pool)
+        self._connected = None  # Lazy connection check
 
     def health_check(self) -> bool:
         """
@@ -455,13 +456,17 @@ class RedisClient:
         Returns:
             True if successful
         """
-        if not isinstance(value, str):
-            value = json.dumps(value)
+        try:
+            if not isinstance(value, str):
+                value = json.dumps(value)
 
-        if ttl:
-            return self.client.setex(key, ttl, value)
-        else:
-            return self.client.set(key, value)
+            if ttl:
+                return self.client.setex(key, ttl, value)
+            else:
+                return self.client.set(key, value)
+        except (redis.ConnectionError, redis.TimeoutError):
+            # Redis not available, fail silently (degraded mode)
+            return False
 
     def get(self, key: str) -> Optional[Any]:
         """
@@ -473,13 +478,17 @@ class RedisClient:
         Returns:
             Value (JSON decoded if possible) or None
         """
-        value = self.client.get(key)
-        if value:
-            try:
-                return json.loads(value)
-            except json.JSONDecodeError:
-                return value
-        return None
+        try:
+            value = self.client.get(key)
+            if value:
+                try:
+                    return json.loads(value)
+                except json.JSONDecodeError:
+                    return value
+            return None
+        except (redis.ConnectionError, redis.TimeoutError):
+            # Redis not available, return None (degraded mode)
+            return None
 
     def delete(self, key: str) -> bool:
         """

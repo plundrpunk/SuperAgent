@@ -5,6 +5,10 @@
  * with OpenAI Realtime API for voice-controlled testing.
  */
 
+// Load environment variables from .env file
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import VoiceOrchestrator from './orchestrator';
 import * as fs from 'fs';
 import * as path from 'path';

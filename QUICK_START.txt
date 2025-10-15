@@ -1,0 +1,90 @@
+╔═══════════════════════════════════════════════════════════╗
+║   SUPERAGENT - QUICK START (Use Without Claude!)         ║
+╚═══════════════════════════════════════════════════════════╝
+
+🚀 ONE-LINE COMMAND:
+   cd /Users/rutledge/Documents/DevFolder/SuperAgent && ./run_kaya.sh "fix all test failures"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 COMMON COMMANDS:
+
+   Status Check:
+   ./run_kaya.sh status
+
+   Fix All Tests:
+   ./run_kaya.sh "fix all test failures"
+
+   Fix Cloppy_AI Tests:
+   ./run_kaya.sh "fix all test failures in /Users/rutledge/Documents/DevFolder/Cloppy_Ai"
+
+   Write New Test:
+   ./run_kaya.sh "write a test for user login"
+
+   Execute Mission:
+   ./run_kaya.sh "execute the mission"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎮 GUI ACCESS (One-Click):
+
+   python3 kaya_quick_access.py
+
+   Or press: Ctrl+Shift+E (anywhere)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 WHAT YOU GET:
+
+   ✅ Auto-detects test failures
+   ✅ Fixes them with minimal changes
+   ✅ Runs regression tests automatically
+   ✅ Shows cost breakdown
+   ✅ Validates all fixes
+   ✅ No Docker required!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 COST TRACKING:
+
+   Status check:        ~$0.001 (instant)
+   Fix test failures:   ~$0.10-0.50
+   Write new test:      ~$0.05-0.20
+
+   Total budget/feature: ~$0.50 average
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 REQUIREMENTS:
+
+   ✅ Python 3.10+ (you have it)
+   ✅ API key in .env (you have it)
+   ✅ Virtual env (auto-created)
+   ✅ Dependencies (auto-installed)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🆘 TROUBLESHOOTING:
+
+   Script won't run:
+   chmod +x run_kaya.sh
+
+   Missing dependencies:
+   source venv/bin/activate && pip install -e .
+
+   API key error:
+   cat .env  # Check ANTHROPIC_API_KEY=sk-ant-...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 MORE INFO:
+
+   Full docs:      STANDALONE_USAGE.md
+   Architecture:   CLAUDE.md
+   Docker guide:   DOCKER.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOU'RE NOW INDEPENDENT! 🎉
+
+No need for Claude Code - just run the script!
