@@ -336,9 +336,9 @@ class KayaAgent(BaseAgent):
             # Execute Scribe
             scribe_result = scribe.execute(
                 task_description=feature,
-                feature_name=feature,
-                output_path=output_path,
-                complexity=routing_decision.difficulty
+                task_scope="",
+                complexity=routing_decision.difficulty,
+                output_path=output_path
             )
 
             # Emit agent_completed event
