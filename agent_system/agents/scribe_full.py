@@ -45,7 +45,7 @@ class ScribeAgent(BaseAgent):
     """
 
     # Model configurations
-    HAIKU_MODEL = "claude-3-5-haiku-20241022"
+    HAIKU_MODEL = "claude-haiku-4-5-20251015"
     SONNET_MODEL = "claude-sonnet-4-5-20250929"
 
     # Cost per 1K tokens (in USD)
