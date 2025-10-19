@@ -309,7 +309,6 @@ CRITICAL REQUIREMENTS:
             'cost_usd': total_cost
         }
 
-    @limit_anthropic()  # Rate limit applied dynamically based on model
     def _generate_test(
         self,
         task_description: str,
