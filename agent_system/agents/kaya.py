@@ -125,7 +125,7 @@ class KayaAgent(BaseAgent):
         """
         if agent_name == 'scribe':
             if self._scribe is None:
-                from agent_system.agents.scribe import ScribeAgent
+                from agent_system.agents.scribe_full import ScribeAgent
                 self._scribe = ScribeAgent()
             return self._scribe
         elif agent_name == 'runner':

@@ -4,8 +4,8 @@ routing:
   - task: write_test
     complexity: easy
     agent: scribe
-    model: haiku
-    reason: "Simple CRUD/visible UI path"
+    model: sonnet
+    reason: "Real test generation requires Sonnet quality"
 
   - task: write_test
     complexity: hard

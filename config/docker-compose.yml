@@ -156,6 +156,9 @@ services:
       - ../build/test-results:/app/test-results
       - ../build/playwright-reports:/app/playwright-report
 
+      # Configuration files (mount for live updates without rebuild)
+      - ../.claude:/app/.claude:ro
+
       # Optional: Mount local code for development (comment out for production)
       # - ../agent_system:/app/agent_system:ro
 

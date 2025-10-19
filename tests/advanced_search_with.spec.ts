@@ -8,13 +8,13 @@ test.use({
   trace: 'retain-on-failure'
 });
 
-test.describe('advanced search with filtering by node type date and content, save as advanced-search.spec.ts', () => {
+test.describe('advanced search with async operations: search with node type filtering using search-filter-type dropdown, search with date range filtering using search-filter-date, search with content text filtering in search-input, test combined filters, verify search-results accuracy, test empty results case. Save as cloppy_ai_advanced_search.spec.ts', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(process.env.BASE_URL!);
   });
 
   test('happy path', async ({ page }) => {
-    // advanced search with filtering by node type date and content, save as advanced-search.spec.ts
+    // advanced search with async operations: search with node type filtering using search-filter-type dropdown, search with date range filtering using search-filter-date, search with content text filtering in search-input, test combined filters, verify search-results accuracy, test empty results case. Save as cloppy_ai_advanced_search.spec.ts
 
     // Take screenshots at key steps
     await page.screenshot({ path: 'screenshot-step-1.png' });
