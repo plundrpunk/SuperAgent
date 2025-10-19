@@ -45,7 +45,7 @@ class ScribeAgent(BaseAgent):
     """
 
     # Model configurations
-    HAIKU_MODEL = "claude-haiku-4-5-20251015"
+    HAIKU_MODEL = "claude-4-5-haiku-20251015"
     SONNET_MODEL = "claude-sonnet-4-5-20250929"
 
     # Cost per 1K tokens (in USD)
@@ -117,7 +117,8 @@ class ScribeAgent(BaseAgent):
             else:
                 model_name = "sonnet" if complexity == "hard" else "haiku"
 
-            model = self.SONNET_MODEL if model_name == "sonnet" else self.HAIKU_MODEL
+            # Always use Sonnet for now (Haiku 4.5 not yet available via API)
+            model = self.SONNET_MODEL
 
             print(f"[Scribe] Task complexity: {complexity} → Using model: {model}")
 
