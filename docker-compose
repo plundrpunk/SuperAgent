@@ -1,0 +1,5 @@
+#!/bin/bash
+# Wrapper script for docker compose with config in config/ directory
+# Usage: ./docker-compose <command> [args]
+
+exec docker compose -f config/docker-compose.yml "$@"
