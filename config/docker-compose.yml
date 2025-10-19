@@ -93,8 +93,8 @@ services:
   # ==============================================================================
   superagent:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: config/Dockerfile
       target: production  # Use 'development' for dev mode
       # Build arguments for customization
       args:
@@ -114,7 +114,7 @@ services:
     # Environment variables from .env file
     # Create .env file based on .env.example
     env_file:
-      - .env
+      - ../.env
 
     # Additional environment variables
     environment:
@@ -139,23 +139,23 @@ services:
     # Volume mounts for data persistence and local development
     volumes:
       # Test files (read-write for test generation)
-      - ./tests:/app/tests
+      - ../tests:/app/tests
 
       # Artifacts: test results, screenshots, videos, traces
-      - ./artifacts:/app/tests/artifacts
+      - ../build/artifacts:/app/tests/artifacts
 
       # Logs: application logs, agent activity
-      - ./logs:/app/logs
+      - ../data/logs:/app/logs
 
       # Vector DB: cold storage for test patterns, bug fixes, HITL annotations
       - vector_db_data:/app/vector_db
 
       # Playwright test results and reports
-      - ./test-results:/app/test-results
-      - ./playwright-report:/app/playwright-report
+      - ../build/test-results:/app/test-results
+      - ../build/playwright-reports:/app/playwright-report
 
       # Optional: Mount local code for development (comment out for production)
-      # - ./agent_system:/app/agent_system:ro
+      # - ../agent_system:/app/agent_system:ro
 
     # Port mappings
     ports:
