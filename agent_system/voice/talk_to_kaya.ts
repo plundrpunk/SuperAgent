@@ -6,7 +6,34 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import VoiceOrchestrator from './orchestrator';
-import Speaker from 'speaker';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// WAV file writing helper
+function writeWavFile(filePath: string, pcmData: Buffer, sampleRate: number) {
+  const header = Buffer.alloc(44);
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcmData.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcmData.length, 40);
+
+  const wavBuffer = Buffer.concat([header, pcmData]);
+  fs.writeFileSync(filePath, wavBuffer);
+}
 
 async function main() {
   console.log('\n🎤 Talk to Kaya - Voice Demo with Echo Voice');
@@ -24,13 +51,11 @@ async function main() {
     temperature: 0.8
   });
 
-  let currentSpeaker: Speaker | null = null;
-
   console.log('✓ Connecting to OpenAI Realtime API...\n');
 
   orchestrator.on('connected', () => {
     console.log('✅ CONNECTED!');
-    console.log('🔊 Audio output enabled - you will HEAR Kaya speak!\n');
+    console.log('✓ Audio output will be saved to a WAV file.\n');
     console.log('Sending test command...\n');
 
     setTimeout(() => {
@@ -53,39 +78,22 @@ async function main() {
     console.log('\n');
   });
 
-  // Play audio!
-  orchestrator.on('audio_delta', (audioDelta: Buffer) => {
-    if (!currentSpeaker) {
-      currentSpeaker = new Speaker({
-        channels: 1,
-        bitDepth: 16,
-        sampleRate: 24000
-      });
-      console.log('🔊 PLAYING AUDIO NOW - Listen to your speakers!\n');
-    }
-    currentSpeaker.write(audioDelta);
-  });
-
+  // Save audio to file
   orchestrator.on('audio_complete', (fullAudio: Buffer) => {
     const seconds = (fullAudio.length / (24000 * 2)).toFixed(1);
-    console.log(`\n✓ Audio finished (${seconds} seconds)`);
-    console.log('\n🎉 You should have heard Kaya\'s voice!');
+    const outputPath = path.join(__dirname, 'talk_to_kaya_response.wav');
+    const sampleRate = orchestrator.getAudioConfig().sampleRate;
+    writeWavFile(outputPath, fullAudio, sampleRate);
 
-    if (currentSpeaker) {
-      // Give speaker time to flush buffer before closing (fixes truncation)
-      setTimeout(() => {
-        if (currentSpeaker) {
-          currentSpeaker.end();
-          currentSpeaker = null;
-        }
-      }, 500);
-    }
+    console.log(`\n✓ Audio finished (${seconds} seconds)`);
+    console.log(`✓ Audio response saved to: ${outputPath}`);
+    console.log('\n🎉 You can now play the WAV file to hear Kaya speak!');
 
     setTimeout(() => {
       console.log('\nDemo complete!\n');
       orchestrator.disconnect();
       process.exit(0);
-    }, 2500);  // Increased to account for speaker flush delay
+    }, 1000);
   });
 
   await orchestrator.connect();
@@ -93,7 +101,6 @@ async function main() {
   // Timeout
   setTimeout(() => {
     console.log('\n⏱️  Timeout');
-    if (currentSpeaker) currentSpeaker.end();
     orchestrator.disconnect();
     process.exit(0);
   }, 30000);

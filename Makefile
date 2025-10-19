@@ -23,138 +23,138 @@ help: ## Display this help message
 
 build: ## Build Docker images
 	@echo "$(BLUE)Building Docker images...$(NC)"
-	docker compose build
+	docker compose -f config/docker-compose.yml build
 
 up: ## Start all services
 	@echo "$(BLUE)Starting services...$(NC)"
-	docker compose up -d
+	docker compose -f config/docker-compose.yml up -d
 	@echo "$(GREEN)Services started successfully!$(NC)"
 	@make status
 
 down: ## Stop all services
 	@echo "$(BLUE)Stopping services...$(NC)"
-	docker compose down
+	docker compose -f config/docker-compose.yml down
 	@echo "$(GREEN)Services stopped$(NC)"
 
 restart: down up ## Restart all services
 
 stop: ## Stop services without removing containers
-	docker compose stop
+	docker compose -f config/docker-compose.yml stop
 
 start: ## Start previously stopped services
-	docker compose start
+	docker compose -f config/docker-compose.yml start
 
 ##@ Logs and Monitoring
 
 logs: ## View logs (follow mode)
-	docker compose logs -f
+	docker compose -f config/docker-compose.yml logs -f
 
 logs-app: ## View SuperAgent logs only
-	docker compose logs -f superagent
+	docker compose -f config/docker-compose.yml logs -f superagent
 
 logs-redis: ## View Redis logs only
-	docker compose logs -f redis
+	docker compose -f config/docker-compose.yml logs -f redis
 
 logs-tail: ## View last 100 lines of logs
-	docker compose logs --tail=100
+	docker compose -f config/docker-compose.yml logs --tail=100
 
 status: ## Show service status
 	@echo "$(BLUE)Service Status:$(NC)"
-	@docker compose ps
+	@docker compose -f config/docker-compose.yml ps
 	@echo ""
 	@echo "$(BLUE)Health Check:$(NC)"
 	@docker inspect --format='{{.State.Health.Status}}' superagent-app 2>/dev/null || echo "Not running"
 
 stats: ## Show resource usage statistics
-	docker compose stats
+	docker compose -f config/docker-compose.yml stats
 
 ##@ Development
 
 shell: ## Open bash shell in SuperAgent container
-	docker compose exec superagent /bin/bash
+	docker compose -f config/docker-compose.yml exec superagent /bin/bash
 
 python: ## Open Python REPL in SuperAgent container
-	docker compose exec superagent python
+	docker compose -f config/docker-compose.yml exec superagent python
 
 redis-cli: ## Open Redis CLI
-	docker compose exec redis redis-cli
+	docker compose -f config/docker-compose.yml exec redis redis-cli
 
 dev: ## Start services with code volume mount (for live editing)
 	@echo "$(YELLOW)Starting in development mode...$(NC)"
-	docker compose -f docker-compose.yml up -d
+	docker compose -f config/docker-compose.yml up -d
 	@echo "$(GREEN)Development mode enabled$(NC)"
 
 ##@ SuperAgent CLI
 
 cli-status: ## Run 'superagent status'
-	docker compose exec superagent python agent_system/cli.py status
+	docker compose -f config/docker-compose.yml exec superagent python agent_system/cli.py status
 
 cli-route: ## Run 'superagent route' (requires TASK and DESC)
 	@test -n "$(TASK)" || (echo "Error: TASK not set. Usage: make cli-route TASK=write_test DESC='Create login test'" && exit 1)
 	@test -n "$(DESC)" || (echo "Error: DESC not set. Usage: make cli-route TASK=write_test DESC='Create login test'" && exit 1)
-	docker compose exec superagent python agent_system/cli.py route $(TASK) "$(DESC)"
+	docker compose -f config/docker-compose.yml exec superagent python agent_system/cli.py route $(TASK) "$(DESC)"
 
 cli-kaya: ## Run 'superagent kaya' (requires CMD)
 	@test -n "$(CMD)" || (echo "Error: CMD not set. Usage: make cli-kaya CMD='create test for login'" && exit 1)
-	docker compose exec superagent python agent_system/cli.py kaya "$(CMD)"
+	docker compose -f config/docker-compose.yml exec superagent python agent_system/cli.py kaya "$(CMD)"
 
 cli-run: ## Run a test (requires TEST)
 	@test -n "$(TEST)" || (echo "Error: TEST not set. Usage: make cli-run TEST=tests/auth.spec.ts" && exit 1)
-	docker compose exec superagent python agent_system/cli.py run $(TEST)
+	docker compose -f config/docker-compose.yml exec superagent python agent_system/cli.py run $(TEST)
 
 cli-review: ## Review a test with Critic (requires TEST)
 	@test -n "$(TEST)" || (echo "Error: TEST not set. Usage: make cli-review TEST=tests/auth.spec.ts" && exit 1)
-	docker compose exec superagent python agent_system/cli.py review $(TEST)
+	docker compose -f config/docker-compose.yml exec superagent python agent_system/cli.py review $(TEST)
 
 cli-hitl: ## Show HITL queue
-	docker compose exec superagent python agent_system/cli.py hitl list
+	docker compose -f config/docker-compose.yml exec superagent python agent_system/cli.py hitl list
 
 ##@ Testing
 
 test: ## Run all tests
-	docker compose exec superagent pytest tests/
+	docker compose -f config/docker-compose.yml exec superagent pytest tests/
 
 test-unit: ## Run unit tests only
-	docker compose exec superagent pytest tests/unit/
+	docker compose -f config/docker-compose.yml exec superagent pytest tests/unit/
 
 test-integration: ## Run integration tests only
-	docker compose exec superagent pytest tests/integration/
+	docker compose -f config/docker-compose.yml exec superagent pytest tests/integration/
 
 test-cov: ## Run tests with coverage report
-	docker compose exec superagent pytest --cov=agent_system --cov-report=html --cov-report=term
+	docker compose -f config/docker-compose.yml exec superagent pytest --cov=agent_system --cov-report=html --cov-report=term
 
 test-playwright: ## Run Playwright baseline tests
-	docker compose exec superagent npx playwright test
+	docker compose -f config/docker-compose.yml exec superagent npx playwright test
 
 ##@ Data Management
 
-backup: ## Backup volumes to ./backups directory
+backup: ## Backup volumes to data/backups/ directory
 	@echo "$(BLUE)Backing up volumes...$(NC)"
-	@mkdir -p backups
+	@mkdir -p data/backups
 	docker run --rm \
 		-v superagent-vector-db:/data \
-		-v $(PWD)/backups:/backup \
+		-v $(PWD)/data/backups:/backup \
 		alpine tar czf /backup/vector_db_$$(date +%Y%m%d_%H%M%S).tar.gz /data
 	docker run --rm \
 		-v superagent-redis-data:/data \
-		-v $(PWD)/backups:/backup \
+		-v $(PWD)/data/backups:/backup \
 		alpine tar czf /backup/redis_$$(date +%Y%m%d_%H%M%S).tar.gz /data
 	@echo "$(GREEN)Backup completed!$(NC)"
-	@ls -lh backups/
+	@ls -lh data/backups/
 
 restore-vector: ## Restore vector DB from backup (requires FILE)
-	@test -n "$(FILE)" || (echo "Error: FILE not set. Usage: make restore-vector FILE=backups/vector_db_20250114.tar.gz" && exit 1)
+	@test -n "$(FILE)" || (echo "Error: FILE not set. Usage: make restore-vector FILE=vector_db_20250114.tar.gz" && exit 1)
 	docker run --rm \
 		-v superagent-vector-db:/data \
-		-v $(PWD)/backups:/backup \
+		-v $(PWD)/data/backups:/backup \
 		alpine tar xzf /backup/$(FILE) -C /
 	@echo "$(GREEN)Vector DB restored$(NC)"
 
 restore-redis: ## Restore Redis from backup (requires FILE)
-	@test -n "$(FILE)" || (echo "Error: FILE not set. Usage: make restore-redis FILE=backups/redis_20250114.tar.gz" && exit 1)
+	@test -n "$(FILE)" || (echo "Error: FILE not set. Usage: make restore-redis FILE=redis_20250114.tar.gz" && exit 1)
 	docker run --rm \
 		-v superagent-redis-data:/data \
-		-v $(PWD)/backups:/backup \
+		-v $(PWD)/data/backups:/backup \
 		alpine tar xzf /backup/$(FILE) -C /
 	@echo "$(GREEN)Redis data restored$(NC)"
 
@@ -162,7 +162,7 @@ restore-redis: ## Restore Redis from backup (requires FILE)
 
 clean: ## Remove stopped containers and dangling images
 	@echo "$(YELLOW)Cleaning up...$(NC)"
-	docker compose down
+	docker compose -f config/docker-compose.yml down
 	docker image prune -f
 	@echo "$(GREEN)Cleanup completed$(NC)"
 
@@ -171,9 +171,9 @@ clean-all: ## Remove all containers, images, volumes, and data (DANGEROUS)
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker compose down -v; \
+		docker compose -f config/docker-compose.yml down -v; \
 		docker image rm superagent:latest 2>/dev/null || true; \
-		rm -rf artifacts/* logs/* test-results/* playwright-report/*; \
+		rm -rf build/* data/logs/* data/vector_db/*; \
 		echo "$(GREEN)All data removed$(NC)"; \
 	else \
 		echo "Cancelled"; \
@@ -181,17 +181,17 @@ clean-all: ## Remove all containers, images, volumes, and data (DANGEROUS)
 
 clean-artifacts: ## Clean test artifacts (screenshots, videos, traces)
 	@echo "$(BLUE)Cleaning test artifacts...$(NC)"
-	rm -rf artifacts/* test-results/* playwright-report/*
+	rm -rf build/artifacts/* build/test-results/* build/playwright-reports/*
 	@echo "$(GREEN)Artifacts cleaned$(NC)"
 
 ##@ Maintenance
 
 rebuild: ## Rebuild images without cache
 	@echo "$(BLUE)Rebuilding images...$(NC)"
-	docker compose build --no-cache
+	docker compose -f config/docker-compose.yml build --no-cache
 
 pull: ## Pull latest base images
-	docker compose pull
+	docker compose -f config/docker-compose.yml pull
 
 update: pull rebuild up ## Update and restart services
 
@@ -218,8 +218,8 @@ setup: ## Initial setup (create .env, build, start)
 		echo "$(YELLOW)Please edit .env and add your API keys$(NC)"; \
 		exit 1; \
 	fi
-	@mkdir -p tests/artifacts logs test-results playwright-report backups
-	@chmod -R 755 tests logs test-results playwright-report backups
+	@mkdir -p build/artifacts build/test-results build/playwright-reports data/logs data/vector_db data/backups
+	@chmod -R 755 build data
 	@make build
 	@make up
 	@echo "$(GREEN)Setup completed!$(NC)"

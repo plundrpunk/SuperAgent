@@ -27,9 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 
 # Install ML dependencies separately with proper configuration
 RUN pip install --no-cache-dir --user \
-    torch==2.1.0 \
-    sentence-transformers>=2.2,<3.0 \
-    chromadb>=0.4,<1.0
+    "torch==2.1.0" \
+    "sentence-transformers>=2.2,<3.0" \
+    "chromadb>=0.4,<1.0"
 
 
 # ==============================================================================
@@ -43,12 +43,33 @@ WORKDIR /build/voice
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     build-essential \
+    autoconf \
+    automake \
+    libtool \
+    wget \
+    bzip2 \
+    ca-certificates \
     libasound2-dev \
+    libmpg123-dev \
+    sox \
+    libopenal-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+# Manually download, build, and install mpg123 from source to ensure arm64 compatibility
+RUN cd /tmp && \
+    wget https://www.mpg123.de/download/mpg123-1.32.3.tar.bz2 && \
+    tar -xjvf mpg123-1.32.3.tar.bz2 && \
+    cd mpg123-1.32.3 && \
+    ./configure --prefix=/usr && \
+    make && \
+    make install
 
 # Copy voice integration package files
 COPY agent_system/voice/package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+ENV npm_config_speaker_mpg123-backend=openal
+RUN npm ci --only=production && \
+    npm cache clean --force
 
 # Copy TypeScript source and build
 COPY agent_system/voice/tsconfig.json ./

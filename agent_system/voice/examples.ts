@@ -14,7 +14,48 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // ============================================================================
-// Example 1: Basic Voice Session
+// WAV File Helper
+// ============================================================================
+
+/**
+ * Writes a raw PCM audio buffer to a WAV file.
+ * @param filePath The path to save the WAV file.
+ * @param pcmData The raw PCM audio data.
+ * @param sampleRate The sample rate of the audio.
+ */
+function writeWavFile(filePath: string, pcmData: Buffer, sampleRate: number) {
+  const header = Buffer.alloc(44);
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  // RIFF header
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcmData.length, 4); // File size - 8
+  header.write('WAVE', 8);
+
+  // fmt chunk
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16); // Sub-chunk size for PCM
+  header.writeUInt16LE(1, 20); // Audio format (1 = PCM)
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+
+  // data chunk
+  header.write('data', 36);
+  header.writeUInt32LE(pcmData.length, 40);
+
+  const wavBuffer = Buffer.concat([header, pcmData]);
+  fs.writeFileSync(filePath, wavBuffer);
+}
+
+
+// ============================================================================
+// Example 1: Basic Voice Session (Modified to Save WAV)
 // ============================================================================
 
 export async function basicVoiceSession() {
@@ -49,7 +90,10 @@ export async function basicVoiceSession() {
   });
 
   orchestrator.on('audio_complete', (audio: Buffer) => {
-    console.log(`\n✓ Audio response ready (${audio.length} bytes)`);
+    const outputPath = path.join(__dirname, 'kaya_response.wav');
+    const sampleRate = orchestrator.getAudioConfig().sampleRate;
+    writeWavFile(outputPath, audio, sampleRate);
+    console.log(`\n✓ Audio response saved to ${outputPath}`);
   });
 
   orchestrator.on('error', (error: Error) => {
@@ -122,8 +166,8 @@ export async function audioStreamingExample() {
 
   orchestrator.on('audio_complete', (audio: Buffer) => {
     // Save response audio to file
-    const outputPath = path.join(__dirname, 'output.pcm');
-    fs.writeFileSync(outputPath, audio);
+    const outputPath = path.join(__dirname, 'output.wav');
+    writeWavFile(outputPath, audio, orchestrator.getAudioConfig().sampleRate);
     console.log(`✓ Saved audio response to ${outputPath}`);
   });
 

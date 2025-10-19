@@ -7,13 +7,40 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import VoiceOrchestrator from './orchestrator';
-import Speaker from 'speaker';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// WAV file writing helper
+function writeWavFile(filePath: string, pcmData: Buffer, sampleRate: number) {
+  const header = Buffer.alloc(44);
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcmData.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcmData.length, 40);
+
+  const wavBuffer = Buffer.concat([header, pcmData]);
+  fs.writeFileSync(filePath, wavBuffer);
+}
 
 async function main() {
   console.log('\n🎤 SuperAgent - Hearing Kaya Speak Demo');
   console.log('=' .repeat(60));
   console.log('This will automatically send a command to Kaya');
-  console.log('and you will HEAR her voice response!\n');
+  console.log('and save her voice response to a WAV file!\n');
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -27,7 +54,6 @@ async function main() {
     temperature: 0.8
   });
 
-  let currentSpeaker: Speaker | null = null;
   let fullTranscript = '';
 
   orchestrator.on('connected', () => {
@@ -61,51 +87,32 @@ async function main() {
     textBuffer = '';
   });
 
-  // Play audio through speakers!
-  orchestrator.on('audio_delta', (audioDelta: Buffer) => {
-    if (!currentSpeaker) {
-      currentSpeaker = new Speaker({
-        channels: 1,
-        bitDepth: 16,
-        sampleRate: 24000
-      });
-
-      console.log('🔊 Playing audio... (listen to your speakers!)');
-    }
-
-    currentSpeaker.write(audioDelta);
-  });
-
+  // Save audio to a .wav file
   orchestrator.on('audio_complete', (fullAudio: Buffer) => {
     const durationSeconds = (fullAudio.length / (24000 * 2)).toFixed(1);
+    const outputPath = path.join(__dirname, 'kaya_speak_demo.wav');
+    const sampleRate = orchestrator.getAudioConfig().sampleRate;
+    writeWavFile(outputPath, fullAudio, sampleRate);
+
     console.log(`\n✓ Audio complete (${fullAudio.length} bytes, ${durationSeconds}s)`);
-    console.log('\n🎉 You should have heard Kaya speak!');
+    console.log(`✓ Audio response saved to: ${outputPath}`);
+    console.log('\n🎉 You can now play the WAV file to hear Kaya speak!');
 
     if (fullTranscript) {
       console.log('\n📝 Kaya said:');
       console.log(`   "${fullTranscript}"`);
     }
 
-    if (currentSpeaker) {
-      // Give speaker time to flush buffer before closing (fixes truncation)
-      setTimeout(() => {
-        if (currentSpeaker) {
-          currentSpeaker.end();
-          currentSpeaker = null;
-        }
-      }, 500);
-    }
-
-    // Exit after 2.5 seconds (increased to account for speaker flush delay)
+    // Exit after a short delay
     setTimeout(() => {
       console.log('\n👋 Demo complete! Disconnecting...\n');
       orchestrator.disconnect();
       process.exit(0);
-    }, 2500);
+    }, 1000);
   });
 
   orchestrator.on('response_complete', () => {
-    console.log('\n─'.repeat(60));
+    console.log('\n' + '─'.repeat(60));
   });
 
   // Connect
@@ -114,9 +121,6 @@ async function main() {
   // Timeout after 30 seconds
   setTimeout(() => {
     console.log('\n⏱️  Timeout - exiting');
-    if (currentSpeaker) {
-      currentSpeaker.end();
-    }
     orchestrator.disconnect();
     process.exit(0);
   }, 30000);

@@ -1,6 +1,5 @@
 /**
- * Voice chat interface - Type to Kaya, HEAR her respond!
- * Plays audio output through speakers
+ * Voice chat interface - Type to Kaya, and her response will be saved to a WAV file.
  */
 
 import * as dotenv from 'dotenv';
@@ -8,10 +7,37 @@ dotenv.config();
 
 import VoiceOrchestrator from './orchestrator';
 import * as readline from 'readline';
-import Speaker from 'speaker';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// WAV file writing helper
+function writeWavFile(filePath: string, pcmData: Buffer, sampleRate: number) {
+  const header = Buffer.alloc(44);
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcmData.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcmData.length, 40);
+
+  const wavBuffer = Buffer.concat([header, pcmData]);
+  fs.writeFileSync(filePath, wavBuffer);
+}
 
 async function main() {
-  console.log('\n🎤 SuperAgent - Talk to Kaya (VOICE MODE)');
+  console.log('\n🎤 SuperAgent - Talk to Kaya (VOICE-TO-FILE MODE)');
   console.log('=' .repeat(60));
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -22,8 +48,7 @@ async function main() {
 
   console.log('✓ OpenAI API key found');
   console.log('✓ Connecting to OpenAI Realtime API...');
-  console.log('✓ Audio output: ENABLED (you will hear Kaya speak!)');
-  console.log();
+  console.log('✓ Audio output will be saved to a WAV file.\n');
 
   const orchestrator = new VoiceOrchestrator({
     apiKey,
@@ -37,9 +62,7 @@ async function main() {
     output: process.stdout
   });
 
-  // Track connection status
   let connected = false;
-  let currentSpeaker: Speaker | null = null;
 
   function showPrompt() {
     if (connected) {
@@ -51,13 +74,11 @@ async function main() {
     connected = true;
     console.log('✅ Connected!\n');
     console.log('=' .repeat(60));
-    console.log('🔊 AUDIO ENABLED - You will HEAR Kaya respond!');
+    console.log('🔊 AUDIO-TO-FILE ENABLED - Kaya\'s responses will be saved as WAV files!');
     console.log('=' .repeat(60));
     console.log('\nExamples:');
     console.log('  • "write a test for Cloppy AI authentication"');
     console.log('  • "run tests/auth.spec.ts"');
-    console.log('  • "what\'s the status?"');
-    console.log('  • "validate the login flow - critical"');
     console.log('\nType "exit" to quit\n');
     showPrompt();
   });
@@ -65,10 +86,6 @@ async function main() {
   orchestrator.on('disconnected', () => {
     if (connected) {
       console.log('\n✗ Disconnected from OpenAI');
-    }
-    if (currentSpeaker) {
-      currentSpeaker.end();
-      currentSpeaker = null;
     }
   });
 
@@ -87,9 +104,6 @@ async function main() {
     console.log('\n🤖 Kaya executed:');
     console.log(`  Agent: ${result.agent || 'unknown'}`);
     console.log(`  Action: ${result.data?.action || 'unknown'}`);
-    if (result.data?.test_path) {
-      console.log(`  Test: ${result.data.test_path}`);
-    }
   });
 
   // Show text responses as they stream
@@ -106,36 +120,12 @@ async function main() {
     textBuffer = '';
   });
 
-  // Play audio through speakers!
-  orchestrator.on('audio_delta', (audioDelta: Buffer) => {
-    if (!currentSpeaker) {
-      // Create speaker with OpenAI's audio format
-      // 24kHz, 16-bit, 1 channel (mono), little-endian
-      currentSpeaker = new Speaker({
-        channels: 1,
-        bitDepth: 16,
-        sampleRate: 24000
-      });
-
-      console.log('🔊 Playing audio...');
-    }
-
-    // Write audio chunk to speaker
-    currentSpeaker.write(audioDelta);
-  });
-
+  // Save audio to a .wav file
   orchestrator.on('audio_complete', (fullAudio: Buffer) => {
-    console.log(`✓ Audio complete (${fullAudio.length} bytes)`);
-
-    if (currentSpeaker) {
-      // Give speaker time to flush buffer before closing (fixes truncation)
-      setTimeout(() => {
-        if (currentSpeaker) {
-          currentSpeaker.end();
-          currentSpeaker = null;
-        }
-      }, 500);
-    }
+    const outputPath = path.join(__dirname, `kaya_response_${Date.now()}.wav`);
+    const sampleRate = orchestrator.getAudioConfig().sampleRate;
+    writeWavFile(outputPath, fullAudio, sampleRate);
+    console.log(`\n✓ Audio response saved to: ${outputPath}`);
   });
 
   orchestrator.on('response_complete', () => {
@@ -153,9 +143,6 @@ async function main() {
 
     if (command.toLowerCase() === 'exit') {
       console.log('\n👋 Goodbye!');
-      if (currentSpeaker) {
-        currentSpeaker.end();
-      }
       orchestrator.disconnect();
       rl.close();
       process.exit(0);
@@ -173,9 +160,6 @@ async function main() {
   });
 
   rl.on('close', () => {
-    if (currentSpeaker) {
-      currentSpeaker.end();
-    }
     orchestrator.disconnect();
     process.exit(0);
   });
@@ -183,9 +167,6 @@ async function main() {
   // Handle Ctrl+C
   process.on('SIGINT', () => {
     console.log('\n\n👋 Goodbye!');
-    if (currentSpeaker) {
-      currentSpeaker.end();
-    }
     orchestrator.disconnect();
     process.exit(0);
   });

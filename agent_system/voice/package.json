@@ -24,7 +24,6 @@
   "license": "MIT",
   "dependencies": {
     "dotenv": "^16.6.1",
-    "speaker": "^0.5.5",
     "ws": "^8.14.2"
   },
   "devDependencies": {
