@@ -160,7 +160,7 @@ services:
       - ../.claude:/app/.claude:ro
 
       # Optional: Mount local code for development (comment out for production)
-      # - ../agent_system:/app/agent_system:ro
+      - ../agent_system:/app/agent_system:ro
 
     # Port mappings
     ports:
