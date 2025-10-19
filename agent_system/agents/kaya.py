@@ -13,6 +13,7 @@ from agent_system.lifecycle import get_lifecycle
 from agent_system.metrics_aggregator import get_metrics_aggregator
 from agent_system.coverage_analyzer import CoverageAnalyzer
 from agent_system.observability.event_stream import emit_event
+from agent_system.archon_client import get_archon_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -89,6 +90,12 @@ class KayaAgent(BaseAgent):
             r'set\s+model\s+to\s+(opus|sonnet|haiku)',
             r'clear\s+model\s+override',
             r'reset\s+models?',
+        ],
+        'build_feature': [
+            r'build\s+(?:me\s+)?(?:a|an)?\s*(.+)',
+            r'create\s+(?:a|an)?\s*(.+?)\s+(?:feature|system|module)',
+            r'implement\s+(.+)',
+            r'add\s+(.+?)\s+(?:feature|functionality)',
         ]
     }
 
@@ -96,8 +103,10 @@ class KayaAgent(BaseAgent):
         """Initialize Kaya orchestrator."""
         super().__init__('kaya')
         self.router = Router()
+        self.archon = get_archon_client()
         self.session_cost = 0.0
         self.task_history = []
+        self.current_project_id = None  # Track active project
 
         # Model override settings
         self.model_override = None  # None, or model name like 'opus', 'sonnet', 'haiku'
@@ -226,6 +235,8 @@ class KayaAgent(BaseAgent):
                 result = self._handle_orchestrate_mission(slots, context)
             elif intent_type == 'set_model':
                 result = self._handle_set_model(slots, context)
+            elif intent_type == 'build_feature':
+                result = self._handle_build_feature(slots, context)
             else:
                 result = AgentResult(
                     success=False,
@@ -1384,6 +1395,129 @@ class KayaAgent(BaseAgent):
             'budget_status': self.check_budget(),
             'task_history': self.task_history
         }
+
+
+    def _handle_build_feature(self, slots: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
+        """
+        Handle build_feature intent - create project, break into tasks, execute tasks.
+
+        This is the "Building Machine" workflow:
+        1. Create Archon project for the feature
+        2. Break feature into granular tasks
+        3. Execute each task with appropriate agent
+        4. Track progress and update Archon
+        5. Report completion
+
+        Args:
+            slots: Dict with raw_value (feature description)
+            context: Optional execution context
+
+        Returns:
+            AgentResult with project/task details
+        """
+        feature = slots.get('raw_value', '')
+        if not feature:
+            return AgentResult(
+                success=False,
+                error="No feature description provided"
+            )
+
+        try:
+            logger.info(f"🏗️  Building feature: {feature}")
+
+            # Step 1: Create project in Archon
+            project_result = self.archon.create_project(
+                title=f"Feature: {feature[:50]}",
+                description=f"Automated feature implementation: {feature}"
+            )
+
+            if not project_result['success']:
+                return AgentResult(
+                    success=False,
+                    error=f"Failed to create project: {project_result.get('error')}"
+                )
+
+            project_id = project_result['project_id']
+            self.current_project_id = project_id
+            logger.info(f"✅ Created project: {project_id}")
+
+            # Step 2: Break feature into tasks
+            tasks = self.archon.breakdown_feature_to_tasks(feature, project_id)
+            logger.info(f"📋 Created {len(tasks)} tasks")
+
+            # Step 3: Create tasks in Archon
+            created_tasks = []
+            for task_def in tasks:
+                task_result = self.archon.create_task(
+                    project_id=project_id,
+                    title=task_def['title'],
+                    description=task_def['description'],
+                    assignee=task_def['assignee'],
+                    feature=task_def.get('feature')
+                )
+                if task_result['success']:
+                    created_tasks.append(task_result)
+                    logger.info(f"  ✓ Task: {task_def['title']}")
+
+            # Step 4: Execute first task (others will be handled iteratively)
+            if created_tasks:
+                first_task = created_tasks[0]
+                logger.info(f"🚀 Starting execution: {first_task['title']}")
+
+                # Mark task as doing
+                self.archon.update_task_status(first_task['task_id'], 'doing')
+
+                # Route to Scribe for implementation
+                # For now, just create test if it's a test task
+                if 'test' in first_task['title'].lower():
+                    # Delegate to create_test handler
+                    test_slots = {'raw_value': first_task['description']}
+                    test_result = self._handle_create_test(test_slots, context)
+
+                    # Update task status based on result
+                    if test_result.success:
+                        self.archon.update_task_status(
+                            first_task['task_id'],
+                            'done',
+                            {'test_path': test_result.data.get('test_path')}
+                        )
+                    else:
+                        self.archon.update_task_status(
+                            first_task['task_id'],
+                            'todo'  # Reset to todo on failure
+                        )
+
+                    return AgentResult(
+                        success=True,
+                        data={
+                            'action': 'feature_build_started',
+                            'project_id': project_id,
+                            'project_title': project_result['title'],
+                            'tasks_created': len(created_tasks),
+                            'tasks': [t['title'] for t in created_tasks],
+                            'first_task_result': test_result.data
+                        },
+                        message=f"✅ Feature build started! Project: {project_id}, Tasks: {len(created_tasks)}, First task completed."
+                    )
+
+            return AgentResult(
+                success=True,
+                data={
+                    'action': 'feature_build_planned',
+                    'project_id': project_id,
+                    'project_title': project_result['title'],
+                    'tasks_created': len(created_tasks),
+                    'tasks': [t['title'] for t in created_tasks]
+                },
+                message=f"✅ Feature planned! Project: {project_id}, Tasks: {len(created_tasks)} created. Ready for execution."
+            )
+
+        except Exception as e:
+            logger.exception(f"Error building feature: {e}")
+            return AgentResult(
+                success=False,
+                error=f"Feature build error: {str(e)}"
+            )
 
 
 def main():
