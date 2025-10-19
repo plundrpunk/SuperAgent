@@ -107,9 +107,10 @@ services:
     stop_signal: SIGTERM
     stop_grace_period: 45s
 
-    # Override default CMD to keep container running
+    # Override default ENTRYPOINT and CMD to keep container running
     # Use `docker-compose exec superagent python agent_system/cli.py <command>` to interact
-    command: tail -f /dev/null
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["tail -f /dev/null"]
 
     # Environment variables from .env file
     # Create .env file based on .env.example
@@ -122,8 +123,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
 
-      # Vector DB path (persisted via volume)
+      # Vector DB and RAG settings
       - VECTOR_DB_PATH=/app/vector_db
+      - ENABLE_RAG=${ENABLE_RAG:-false}
 
       # Playwright configuration
       - PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright

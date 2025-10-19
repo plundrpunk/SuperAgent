@@ -102,8 +102,12 @@ test.describe('{feature_name}', () => {{
         """
         super().__init__('scribe')
 
-        # Initialize RAG components
-        self.vector_client = vector_client or VectorClient()
+        # Check if RAG is disabled via environment variable
+        import os
+        self.rag_enabled = os.getenv('ENABLE_RAG', 'true').lower() == 'true'
+
+        # Initialize RAG components only if enabled
+        self.vector_client = vector_client or (VectorClient() if self.rag_enabled else None)
 
         # RAG configuration
         self.rag_config = {
@@ -314,6 +318,10 @@ REQUIREMENTS:
             List of similar test patterns above threshold
         """
         self.rag_queries += 1
+
+        # Skip RAG if disabled
+        if not self.rag_enabled or self.vector_client is None:
+            return []
 
         try:
             # Search vector DB

@@ -1,0 +1,120 @@
+VisionFlow Testing Coverage Gaps - Detailed Requirements
+=========================================================
+
+From: Gemini Testing Coverage Analysis (2025-10-19)
+Overall Coverage: 75% | Target: 95%+
+
+---
+
+PRIORITY 1: ADVANCED FEATURES
+==============================
+
+1. Export Functionality (export.spec.ts)
+   - Test export board content to PDF format
+   - Test export board content to Markdown format
+   - Verify exported content matches board state
+   - Test export with empty boards
+   - Test export with media nodes (images, videos)
+   - Follow Page Object Model pattern
+   - Use data-testid selectors
+   - Target file: /frontend/e2e/export.spec.ts
+
+2. Advanced Search (advanced-search.spec.ts)
+   - Test search with node type filtering
+   - Test search with date range filtering
+   - Test search with content/text filtering
+   - Test combined filters
+   - Verify search results accuracy
+   - Test empty search results
+   - Follow existing patterns in /frontend/e2e/pages/
+   - Target file: /frontend/e2e/advanced-search.spec.ts
+
+3. Group Management (group-management.spec.ts)
+   - Test creating geometric group boxes
+   - Test renaming groups
+   - Test resizing groups
+   - Test deleting groups
+   - Test connecting group to AI chat node
+   - Verify AI receives correct context from grouped nodes
+   - Test nested groups (if supported)
+   - Target file: /frontend/e2e/group-management.spec.ts
+
+---
+
+PRIORITY 2: DEVOPS & INFRASTRUCTURE
+====================================
+
+4. Database Migrations (migration.spec.ts)
+   - Test migration execution
+   - Verify schema changes applied
+   - Verify no data loss during migration
+   - Test rollback functionality (if available)
+   - Use test helpers from /frontend/e2e/utils/test-helpers.ts
+   - Target file: /frontend/e2e/migration.spec.ts
+
+5. Docker Deployment (docker-deployment.spec.ts)
+   - Test Docker container build
+   - Test all services start successfully
+   - Verify health checks pass
+   - Test service accessibility (API endpoints)
+   - Verify database connectivity
+   - Verify Redis connectivity
+   - Target file: /frontend/e2e/docker-deployment.spec.ts
+
+---
+
+PRIORITY 3: PERFORMANCE & LOAD
+===============================
+
+6. Large Board Performance (performance.spec.ts)
+   - Programmatically create board with 500+ nodes
+   - Measure initial rendering time
+   - Test panning performance (latency)
+   - Test zooming performance (latency)
+   - Test node selection performance
+   - Set performance thresholds:
+     * Initial render: < 2 seconds
+     * Pan/zoom: < 100ms latency
+     * Node selection: < 50ms
+   - Target file: /frontend/e2e/performance.spec.ts
+
+---
+
+IMPLEMENTATION GUIDELINES
+=========================
+
+All tests must:
+✓ Use data-testid attributes for selectors (no CSS classes or nth())
+✓ Follow Page Object Model (POM) patterns
+✓ Include comprehensive assertions for UI state and API responses
+✓ Have screenshots after major steps
+✓ Include error case testing
+✓ Use helpers from /frontend/e2e/utils/test-helpers.ts
+
+Template structure:
+```typescript
+import { test, expect } from '@playwright/test';
+
+const S = (id: string) => `[data-testid="${id}"]`;
+
+test.use({
+  screenshot: 'on',
+  video: 'retain-on-failure',
+  trace: 'retain-on-failure'
+});
+
+test.describe('FEATURE_NAME', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(process.env.BASE_URL!);
+    // Setup
+  });
+
+  test('happy path', async ({ page }) => {
+    // Test implementation
+  });
+
+  test('error case', async ({ page }) => {
+    // Error handling
+  });
+});
+```
