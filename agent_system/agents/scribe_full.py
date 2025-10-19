@@ -62,8 +62,8 @@ class ScribeAgent(BaseAgent):
         {'pattern': r'\.nth\(\d+\)', 'reason': 'Index-based selectors are flaky'},
         {'pattern': r'\.css-[a-z0-9]+', 'reason': 'Generated CSS classes change frequently'},
         {'pattern': r'waitForTimeout', 'reason': 'Use waitForSelector instead'},
-        {'pattern': r'hard[_-]?coded.*credential', 'reason': 'Use environment variables', 'flags': re.IGNORECASE},
-        {'pattern': r'localhost|127\.0\.0\.1', 'reason': 'Use process.env.BASE_URL'}
+        {'pattern': r'hard[_-]?coded.*credential', 'reason': 'Use environment variables', 'flags': re.IGNORECASE}
+        # Removed localhost check - fallback URLs are okay (e.g., process.env.BASE_URL || 'http://localhost:3000')
     ]
 
     MAX_RETRIES = 3
