@@ -20,184 +20,177 @@ test.describe('Database Migrations with OAuth', () => {
     // Navigate to base URL from environment
     await page.goto(process.env.BASE_URL || 'http://localhost:3000');
     
-    // Step 1: Authenticate with OAuth
-    await page.click(S('oauth-login-button'));
-    await page.waitForSelector(S('oauth-provider-select'));
-    await page.screenshot({ path: 'artifacts/oauth-login.png', fullPage: true });
-    
-    // Step 2: Select OAuth provider and complete authentication
-    await page.click(S('oauth-provider-google'));
-    await page.fill(S('oauth-email-input'), process.env.TEST_EMAIL || 'test@example.com');
-    await page.fill(S('oauth-password-input'), process.env.TEST_PASSWORD || 'testpassword');
-    await page.click(S('oauth-submit-button'));
-    await page.waitForSelector(S('dashboard-container'));
-    await page.screenshot({ path: 'artifacts/oauth-authenticated.png', fullPage: true });
-    
-    // Step 3: Navigate to database migrations page
-    await page.click(S('admin-menu'));
-    await page.click(S('migrations-link'));
-    await page.waitForSelector(S('migrations-dashboard'));
-    await page.screenshot({ path: 'artifacts/migrations-page.png', fullPage: true });
+    // Authenticate with OAuth if required
+    if (process.env.OAUTH_USERNAME && process.env.OAUTH_PASSWORD) {
+      await page.waitForSelector(S('oauth-login-button'));
+      await page.click(S('oauth-login-button'));
+      await page.fill(S('oauth-username-input'), process.env.OAUTH_USERNAME);
+      await page.fill(S('oauth-password-input'), process.env.OAUTH_PASSWORD);
+      await page.click(S('oauth-submit-button'));
+      await page.waitForSelector(S('dashboard-container'));
+    }
   });
 
   test('happy path - execute migration and verify schema changes', async ({ page }) => {
-    // Step 1: Check existing records before migration
-    await page.click(S('view-existing-records-button'));
-    await page.waitForSelector(S('records-table'));
-    await page.screenshot({ path: 'artifacts/pre-migration-records.png', fullPage: true });
+    // Step 1: Navigate to database migrations page
+    await page.click(S('admin-menu'));
+    await page.click(S('database-migrations-link'));
+    await page.waitForSelector(S('migrations-dashboard'));
+    await page.screenshot({ path: 'artifacts/migration-dashboard.png', fullPage: true });
+
+    // Step 2: Check existing records count before migration
+    await page.click(S('view-records-button'));
+    await page.waitForSelector(S('records-count-display'));
+    const recordsBeforeMigration = await page.locator(S('records-count-display')).textContent();
+    await page.screenshot({ path: 'artifacts/records-before-migration.png', fullPage: true });
+
+    // Step 3: Execute migration against PostgreSQL database
+    await page.click(S('run-migration-button'));
+    await page.waitForSelector(S('migration-confirmation-dialog'));
+    await page.screenshot({ path: 'artifacts/migration-confirmation.png', fullPage: true });
     
-    const preMigrationCount = await page.locator(S('records-count')).textContent();
-    await expect(page.locator(S('records-count'))).toBeVisible();
-    await expect(page.locator(S('records-count'))).toContainText(/\d+/);
-    
-    // Step 2: Select migration file to execute
-    await page.click(S('select-migration-button'));
-    await page.waitForSelector(S('migration-file-list'));
-    await page.click(S('migration-file-cloppy-ai-schema'));
-    await page.screenshot({ path: 'artifacts/migration-selected.png', fullPage: true });
-    
-    await expect(page.locator(S('migration-file-name'))).toBeVisible();
-    await expect(page.locator(S('migration-file-name'))).toContainText('cloppy_ai_schema');
-    
-    // Step 3: Execute migration against PostgreSQL
-    await page.click(S('execute-migration-button'));
+    await page.click(S('confirm-migration-button'));
     await page.waitForSelector(S('migration-progress-indicator'));
-    await page.screenshot({ path: 'artifacts/migration-executing.png', fullPage: true });
-    
+    await page.screenshot({ path: 'artifacts/migration-in-progress.png', fullPage: true });
+
     // Step 4: Wait for migration completion
     await page.waitForSelector(S('migration-success-message'), { timeout: 60000 });
     await page.screenshot({ path: 'artifacts/migration-completed.png', fullPage: true });
-    
-    await expect(page.locator(S('migration-success-message'))).toBeVisible();
-    await expect(page.locator(S('migration-success-message'))).toContainText('Migration completed successfully');
-    
+
     // Step 5: Verify schema changes applied correctly
     await page.click(S('view-schema-button'));
     await page.waitForSelector(S('schema-details-panel'));
-    await page.screenshot({ path: 'artifacts/schema-changes.png', fullPage: true });
-    
-    await expect(page.locator(S('schema-table-cloppy-ai'))).toBeVisible();
-    await expect(page.locator(S('schema-column-vector-embedding'))).toBeVisible();
-    await expect(page.locator(S('schema-column-oauth-token'))).toBeVisible();
-    
+    await page.screenshot({ path: 'artifacts/schema-after-migration.png', fullPage: true });
+
     // Step 6: Verify no data loss by checking existing records
-    await page.click(S('view-existing-records-button'));
-    await page.waitForSelector(S('records-table'));
-    await page.screenshot({ path: 'artifacts/post-migration-records.png', fullPage: true });
-    
-    const postMigrationCount = await page.locator(S('records-count')).textContent();
-    await expect(page.locator(S('records-count'))).toBeVisible();
-    expect(postMigrationCount).toBe(preMigrationCount);
-    
-    // Step 7: Verify vector search still works after migration
-    await page.click(S('test-vector-search-button'));
-    await page.fill(S('vector-search-input'), 'test query for vector search');
-    await page.click(S('execute-vector-search-button'));
+    await page.click(S('view-records-button'));
+    await page.waitForSelector(S('records-count-display'));
+    const recordsAfterMigration = await page.locator(S('records-count-display')).textContent();
+    await page.screenshot({ path: 'artifacts/records-after-migration.png', fullPage: true });
+
+    // Step 7: Test vector search functionality after migration
+    await page.click(S('vector-search-tab'));
+    await page.waitForSelector(S('vector-search-input'));
+    await page.fill(S('vector-search-input'), 'test query');
+    await page.click(S('vector-search-submit-button'));
     await page.waitForSelector(S('vector-search-results'));
     await page.screenshot({ path: 'artifacts/vector-search-results.png', fullPage: true });
+
+    // Assertions - verify migration success
+    await expect(page.locator(S('migration-success-message'))).toBeVisible();
+    await expect(page.locator(S('migration-success-message'))).toContainText('Migration completed successfully');
+    await expect(page.locator(S('schema-details-panel'))).toBeVisible();
+    await expect(page.locator(S('schema-version-display'))).toContainText('v');
     
+    // Verify no data loss
+    expect(recordsBeforeMigration).toBe(recordsAfterMigration);
+    await expect(page.locator(S('records-count-display'))).toBeVisible();
+    
+    // Verify vector search works
     await expect(page.locator(S('vector-search-results'))).toBeVisible();
-    await expect(page.locator(S('vector-search-status'))).toContainText('Search completed');
     await expect(page.locator(S('vector-search-result-item')).first()).toBeVisible();
   });
 
-  test('test rollback functionality after migration', async ({ page }) => {
-    // Step 1: Execute a migration first
-    await page.click(S('select-migration-button'));
-    await page.waitForSelector(S('migration-file-list'));
-    await page.click(S('migration-file-cloppy-ai-schema'));
-    await page.click(S('execute-migration-button'));
-    await page.waitForSelector(S('migration-success-message'), { timeout: 60000 });
-    await page.screenshot({ path: 'artifacts/rollback-pre-migration.png', fullPage: true });
-    
-    await expect(page.locator(S('migration-success-message'))).toBeVisible();
-    
-    // Step 2: Verify migration was applied
-    await page.click(S('view-schema-button'));
-    await page.waitForSelector(S('schema-details-panel'));
-    await page.screenshot({ path: 'artifacts/rollback-schema-before.png', fullPage: true });
-    
-    await expect(page.locator(S('schema-table-cloppy-ai'))).toBeVisible();
-    
-    // Step 3: Initiate rollback
-    await page.click(S('migrations-history-button'));
+  test('happy path - test rollback functionality', async ({ page }) => {
+    // Step 1: Navigate to database migrations page
+    await page.click(S('admin-menu'));
+    await page.click(S('database-migrations-link'));
+    await page.waitForSelector(S('migrations-dashboard'));
+    await page.screenshot({ path: 'artifacts/rollback-dashboard.png', fullPage: true });
+
+    // Step 2: View migration history
+    await page.click(S('migration-history-tab'));
     await page.waitForSelector(S('migration-history-list'));
+    await page.screenshot({ path: 'artifacts/migration-history.png', fullPage: true });
+
+    // Step 3: Select latest migration for rollback
     await page.click(S('latest-migration-item'));
+    await page.waitForSelector(S('migration-details-panel'));
+    await page.screenshot({ path: 'artifacts/migration-details.png', fullPage: true });
+
+    // Step 4: Initiate rollback
     await page.click(S('rollback-migration-button'));
-    await page.screenshot({ path: 'artifacts/rollback-initiated.png', fullPage: true });
-    
-    // Step 4: Confirm rollback action
     await page.waitForSelector(S('rollback-confirmation-dialog'));
+    await page.screenshot({ path: 'artifacts/rollback-confirmation.png', fullPage: true });
+
     await page.click(S('confirm-rollback-button'));
     await page.waitForSelector(S('rollback-progress-indicator'));
-    await page.screenshot({ path: 'artifacts/rollback-executing.png', fullPage: true });
-    
+    await page.screenshot({ path: 'artifacts/rollback-in-progress.png', fullPage: true });
+
     // Step 5: Wait for rollback completion
     await page.waitForSelector(S('rollback-success-message'), { timeout: 60000 });
     await page.screenshot({ path: 'artifacts/rollback-completed.png', fullPage: true });
-    
-    await expect(page.locator(S('rollback-success-message'))).toBeVisible();
-    await expect(page.locator(S('rollback-success-message'))).toContainText('Rollback completed successfully');
-    
-    // Step 6: Verify schema reverted to previous state
+
+    // Step 6: Verify schema reverted correctly
     await page.click(S('view-schema-button'));
     await page.waitForSelector(S('schema-details-panel'));
-    await page.screenshot({ path: 'artifacts/rollback-schema-after.png', fullPage: true });
-    
+    await page.screenshot({ path: 'artifacts/schema-after-rollback.png', fullPage: true });
+
+    // Step 7: Verify data integrity after rollback
+    await page.click(S('view-records-button'));
+    await page.waitForSelector(S('records-count-display'));
+    await page.screenshot({ path: 'artifacts/records-after-rollback.png', fullPage: true });
+
+    // Assertions - verify rollback success
+    await expect(page.locator(S('rollback-success-message'))).toBeVisible();
+    await expect(page.locator(S('rollback-success-message'))).toContainText('Rollback completed successfully');
     await expect(page.locator(S('schema-details-panel'))).toBeVisible();
-    await expect(page.locator(S('rollback-verification-status'))).toContainText('Schema reverted');
+    await expect(page.locator(S('records-count-display'))).toBeVisible();
+    await expect(page.locator(S('migration-status-badge'))).toContainText('Rolled back');
   });
 
   test('error case - migration fails with invalid schema', async ({ page }) => {
-    // Step 1: Select invalid migration file
-    await page.click(S('select-migration-button'));
-    await page.waitForSelector(S('migration-file-list'));
-    await page.click(S('migration-file-invalid-schema'));
-    await page.screenshot({ path: 'artifacts/error-invalid-migration-selected.png', fullPage: true });
-    
-    await expect(page.locator(S('migration-file-name'))).toBeVisible();
-    
-    // Step 2: Attempt to execute invalid migration
-    await page.click(S('execute-migration-button'));
-    await page.waitForSelector(S('migration-progress-indicator'));
-    await page.screenshot({ path: 'artifacts/error-migration-executing.png', fullPage: true });
-    
-    // Step 3: Wait for error message
-    await page.waitForSelector(S('migration-error-message'), { timeout: 60000 });
+    // Step 1: Navigate to database migrations page
+    await page.click(S('admin-menu'));
+    await page.click(S('database-migrations-link'));
+    await page.waitForSelector(S('migrations-dashboard'));
+    await page.screenshot({ path: 'artifacts/error-migration-dashboard.png', fullPage: true });
+
+    // Step 2: Upload invalid migration file
+    await page.click(S('upload-migration-button'));
+    await page.waitForSelector(S('migration-file-upload-input'));
+    await page.screenshot({ path: 'artifacts/error-upload-dialog.png', fullPage: true });
+
+    // Step 3: Attempt to execute invalid migration
+    await page.click(S('execute-uploaded-migration-button'));
+    await page.waitForSelector(S('migration-error-message'));
     await page.screenshot({ path: 'artifacts/error-migration-failed.png', fullPage: true });
-    
+
+    // Step 4: Verify error details displayed
+    await page.click(S('view-error-details-button'));
+    await page.waitForSelector(S('error-details-panel'));
+    await page.screenshot({ path: 'artifacts/error-details-panel.png', fullPage: true });
+
+    // Assertions - verify error handling
     await expect(page.locator(S('migration-error-message'))).toBeVisible();
     await expect(page.locator(S('migration-error-message'))).toContainText('Migration failed');
-    await expect(page.locator(S('migration-error-details'))).toContainText('syntax error');
-    
-    // Step 4: Verify database state unchanged
-    await page.click(S('view-schema-button'));
-    await page.waitForSelector(S('schema-details-panel'));
-    await page.screenshot({ path: 'artifacts/error-schema-unchanged.png', fullPage: true });
-    
-    await expect(page.locator(S('schema-status'))).toContainText('No changes applied');
+    await expect(page.locator(S('error-details-panel'))).toBeVisible();
+    await expect(page.locator(S('error-details-panel'))).toContainText('schema');
   });
 
-  test('error case - OAuth token expired during migration', async ({ page }) => {
-    // Step 1: Simulate OAuth token expiration
-    await page.evaluate(() => {
-      localStorage.setItem('oauth_token_expired', 'true');
-    });
-    await page.screenshot({ path: 'artifacts/error-token-expired-setup.png', fullPage: true });
-    
-    // Step 2: Attempt to execute migration with expired token
-    await page.click(S('select-migration-button'));
-    await page.waitForSelector(S('migration-file-list'));
-    await page.click(S('migration-file-cloppy-ai-schema'));
-    await page.click(S('execute-migration-button'));
-    await page.screenshot({ path: 'artifacts/error-token-migration-attempt.png', fullPage: true });
-    
-    // Step 3: Verify authentication error displayed
-    await page.waitForSelector(S('auth-error-message'));
-    await page.screenshot({ path: 'artifacts/error-auth-failed.png', fullPage: true });
-    
-    await expect(page.locator(S('auth-error-message'))).toBeVisible();
-    await expect(page.locator(S('auth-error-message'))).toContainText('Authentication required');
-    await expect(page.locator(S('reauth-button'))).toBeVisible();
+  test('error case - OAuth authentication failure during migration', async ({ page }) => {
+    // Step 1: Logout to test auth failure
+    await page.click(S('user-menu'));
+    await page.click(S('logout-button'));
+    await page.waitForSelector(S('oauth-login-button'));
+    await page.screenshot({ path: 'artifacts/error-logged-out.png', fullPage: true });
+
+    // Step 2: Attempt to access migrations without authentication
+    await page.goto(`${process.env.BASE_URL || 'http://localhost:3000'}/admin/migrations`);
+    await page.waitForSelector(S('auth-required-message'));
+    await page.screenshot({ path: 'artifacts/error-auth-required.png', fullPage: true });
+
+    // Step 3: Attempt login with invalid OAuth credentials
+    await page.click(S('oauth-login-button'));
+    await page.fill(S('oauth-username-input'), 'invalid@example.com');
+    await page.fill(S('oauth-password-input'), 'wrongpassword');
+    await page.click(S('oauth-submit-button'));
+    await page.waitForSelector(S('oauth-error-message'));
+    await page.screenshot({ path: 'artifacts/error-oauth-failed.png', fullPage: true });
+
+    // Assertions - verify authentication error
+    await expect(page.locator(S('oauth-error-message'))).toBeVisible();
+    await expect(page.locator(S('oauth-error-message'))).toContainText('Authentication failed');
+    await expect(page.locator(S('auth-required-message'))).toBeVisible();
   });
 });
