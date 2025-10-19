@@ -1495,9 +1495,9 @@ class KayaAgent(BaseAgent):
                             'project_title': project_result['title'],
                             'tasks_created': len(created_tasks),
                             'tasks': [t['title'] for t in created_tasks],
-                            'first_task_result': test_result.data
-                        },
-                        message=f"✅ Feature build started! Project: {project_id}, Tasks: {len(created_tasks)}, First task completed."
+                            'first_task_result': test_result.data,
+                            'message': f"✅ Feature build started! Project: {project_id}, Tasks: {len(created_tasks)}, First task completed."
+                        }
                     )
 
             return AgentResult(
@@ -1507,9 +1507,9 @@ class KayaAgent(BaseAgent):
                     'project_id': project_id,
                     'project_title': project_result['title'],
                     'tasks_created': len(created_tasks),
-                    'tasks': [t['title'] for t in created_tasks]
-                },
-                message=f"✅ Feature planned! Project: {project_id}, Tasks: {len(created_tasks)} created. Ready for execution."
+                    'tasks': [t['title'] for t in created_tasks],
+                    'message': f"✅ Feature planned! Project: {project_id}, Tasks: {len(created_tasks)} created. Ready for execution."
+                }
             )
 
         except Exception as e:

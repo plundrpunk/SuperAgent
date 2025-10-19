@@ -92,8 +92,10 @@ class ArchonClient:
                 'task_id': f'task_{int(time.time())}',
                 'project_id': project_id,
                 'title': title,
+                'description': description,
                 'status': 'todo',
                 'assignee': assignee,
+                'feature': feature,
                 'message': f'Task "{title}" created successfully'
             }
         except Exception as e:
