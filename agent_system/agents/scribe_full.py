@@ -633,11 +633,12 @@ Do not include explanations outside the code block.
         # Remove common words
         feature_name = re.sub(r'\b(test|for|the|a|an)\b', '', feature_name)
 
-        # Replace spaces and special chars with underscores
-        feature_name = re.sub(r'[^a-z0-9]+', '_', feature_name)
+        # Replace spaces and special chars with underscores (including colons!)
+        # Explicitly handle invalid filename characters: : / \ * ? " < > |
+        feature_name = re.sub(r'[^a-z0-9_]+', '_', feature_name)
 
-        # Remove leading/trailing underscores
-        feature_name = feature_name.strip('_')
+        # Remove leading/trailing underscores and collapse multiple underscores
+        feature_name = re.sub(r'_+', '_', feature_name).strip('_')
 
         # Limit length
         feature_name = feature_name[:50]
