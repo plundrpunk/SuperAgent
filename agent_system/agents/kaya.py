@@ -1471,9 +1471,38 @@ class KayaAgent(BaseAgent):
                 if fix_attempts >= 2:
                     logger.info(f"🔍 Searching Archon knowledge base for similar test patterns...")
                     try:
+                        # Extract keywords from both feature description AND error message
+                        feature_desc = task.get('feature', task.get('description', ''))
+                        error_msg = runner_result.error or ''
+                        combined_text = f"{feature_desc} {error_msg}".lower()
+
+                        keywords = []
+
+                        # Extract UI element keywords
+                        ui_keywords = ['button', 'input', 'form', 'modal', 'menu', 'board', 'node',
+                                     'click', 'select', 'data-testid', 'selector', 'wait']
+                        for keyword in ui_keywords:
+                            if keyword in combined_text:
+                                keywords.append(keyword)
+
+                        # Extract error-specific keywords
+                        if 'timeout' in combined_text:
+                            keywords.insert(0, 'wait')  # Prioritize wait patterns
+                        if 'selector' in combined_text or 'locator' in combined_text:
+                            keywords.insert(0, 'data-testid')
+
+                        # Deduplicate while preserving order
+                        seen = set()
+                        keywords = [k for k in keywords if not (k in seen or seen.add(k))]
+
+                        # Use 2-3 most relevant keywords (simplified for better matches!)
+                        rag_query = ' '.join(keywords[:3]) if keywords else 'playwright test'
+
+                        logger.info(f"📝 RAG query: '{rag_query}' (from feature + error)")
+
                         rag_results = self.archon.search_knowledge_base(
-                            query=f"{task.get('feature', '')} {test_path}",
-                            match_count=3
+                            query=rag_query,
+                            match_count=5
                         )
                         if rag_results.get('success'):
                             rag_context = rag_results.get('results', [])
