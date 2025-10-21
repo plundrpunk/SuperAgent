@@ -60,7 +60,8 @@ class MedicAgent(BaseAgent):
     def __init__(
         self,
         redis_client: Optional[RedisClient] = None,
-        hitl_queue: Optional[HITLQueue] = None
+        hitl_queue: Optional[HITLQueue] = None,
+        disable_hitl_escalation: bool = False  # For autonomous overnight builds
     ):
         """
         Initialize Medic agent.
@@ -82,6 +83,7 @@ class MedicAgent(BaseAgent):
         # Initialize state management
         self.redis = redis_client or RedisClient()
         self.hitl = hitl_queue or HITLQueue(redis_client=self.redis)
+        self.disable_hitl_escalation = disable_hitl_escalation
 
     def execute(
         self,
@@ -117,18 +119,34 @@ class MedicAgent(BaseAgent):
 
             # Check if we've exceeded max retries
             if attempts > self.MAX_RETRIES:
-                print(f"[Medic] Max retries ({self.MAX_RETRIES}) exceeded. Escalating to HITL.")
-                escalation_result = self._escalate_to_hitl(
-                    task_id=task_id,
-                    test_path=test_path,
-                    error_message=error_message,
-                    feature=feature,
-                    attempts=attempts,
-                    reason="max_retries_exceeded",
-                    artifacts={},
-                    api_cost=api_cost
-                )
-                return escalation_result
+                if self.disable_hitl_escalation:
+                    # For autonomous builds: just fail gracefully without escalation
+                    print(f"[Medic] Max retries ({self.MAX_RETRIES}) exceeded. Marking for review (HITL disabled).")
+                    return AgentResult(
+                        success=False,
+                        error=f"Max fix attempts ({self.MAX_RETRIES}) exceeded. Test needs manual review.",
+                        data={
+                            'action': 'max_retries_exceeded',
+                            'test_path': test_path,
+                            'attempts': attempts,
+                            'error_message': error_message,
+                            'hitl_disabled': True
+                        }
+                    )
+                else:
+                    # Normal operation: escalate to HITL
+                    print(f"[Medic] Max retries ({self.MAX_RETRIES}) exceeded. Escalating to HITL.")
+                    escalation_result = self._escalate_to_hitl(
+                        task_id=task_id,
+                        test_path=test_path,
+                        error_message=error_message,
+                        feature=feature,
+                        attempts=attempts,
+                        reason="max_retries_exceeded",
+                        artifacts={},
+                        api_cost=api_cost
+                    )
+                    return escalation_result
             # Step 1: Capture baseline (pre-fix regression test results)
             print(f"[Medic] Capturing baseline regression tests...")
             baseline = self._run_regression_tests()
@@ -182,22 +200,27 @@ class MedicAgent(BaseAgent):
 
             # Check if AI confidence is too low
             if confidence < self.CONFIDENCE_THRESHOLD:
-                print(f"[Medic] Low AI confidence ({confidence:.2f}). Escalating to HITL.")
-                escalation_result = self._escalate_to_hitl(
-                    task_id=task_id,
-                    test_path=test_path,
-                    error_message=error_message,
-                    feature=feature,
-                    attempts=attempts,
-                    reason="low_confidence",
-                    artifacts={
-                        'diagnosis': diagnosis,
-                        'confidence': confidence,
-                        'proposed_fix': proposed_fix[:500]  # Truncate for storage
-                    },
-                    api_cost=api_cost
-                )
-                return escalation_result
+                if self.disable_hitl_escalation:
+                    # For autonomous builds: just log and continue with fix anyway
+                    print(f"[Medic] Low AI confidence ({confidence:.2f}) but HITL disabled - applying fix anyway")
+                else:
+                    # Normal operation: escalate to HITL
+                    print(f"[Medic] Low AI confidence ({confidence:.2f}). Escalating to HITL.")
+                    escalation_result = self._escalate_to_hitl(
+                        task_id=task_id,
+                        test_path=test_path,
+                        error_message=error_message,
+                        feature=feature,
+                        attempts=attempts,
+                        reason="low_confidence",
+                        artifacts={
+                            'diagnosis': diagnosis,
+                            'confidence': confidence,
+                            'proposed_fix': proposed_fix[:500]  # Truncate for storage
+                        },
+                        api_cost=api_cost
+                    )
+                    return escalation_result
 
             # Step 5: Apply fix and generate diff
             print(f"[Medic] Applying fix to {test_path}...")
@@ -578,6 +601,17 @@ class MedicAgent(BaseAgent):
         Returns:
             Prompt string
         """
+        # Load VisionFlow context if available
+        visionflow_context = ""
+        try:
+            from pathlib import Path
+            project_root = Path(__file__).parent.parent.parent
+            context_path = project_root / "visionflow_context.md"
+            if context_path.exists():
+                visionflow_context = context_path.read_text()
+        except Exception as e:
+            print(f"[Medic] Warning: Could not load visionflow_context.md: {e}")
+
         prompt = f"""You are Medic, a test repair specialist. Your mission: apply MINIMAL surgical fixes to failing Playwright tests.
 
 HIPPOCRATIC OATH:
@@ -594,6 +628,9 @@ CURRENT TEST CODE:
 ```typescript
 {test_content}
 ```
+
+{"APPLICATION CONTEXT (VisionFlow/Cloppy AI - USE THESE SELECTORS):" if visionflow_context else ""}
+{visionflow_context}
 
 CONTEXT:
 {json.dumps(context, indent=2)}

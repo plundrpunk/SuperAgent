@@ -18,12 +18,15 @@ class ArchonClient:
     - Break features into tasks
     - Track task status
     - Store documents and version history
+    - Search knowledge base (RAG) for Cloppy AI patterns
     """
 
     def __init__(self):
         """Initialize Archon client."""
         self.enabled = True
-        logger.info("ArchonClient initialized")
+        self.use_real_mcp = True  # Use HTTP API instead of MCP
+        self.archon_api_url = "http://host.docker.internal:8181/api"
+        logger.info(f"ArchonClient initialized (real_mcp={self.use_real_mcp}, api={self.archon_api_url})")
 
     def create_project(
         self,
@@ -43,17 +46,51 @@ class ArchonClient:
             Dict with success, project_id, message
         """
         try:
-            # TODO: Call mcp__archon__manage_project when MCP server is available
-            # For now, return mock data for development
-            logger.info(f"Creating project: {title}")
+            if not self.use_real_mcp:
+                # Mock mode
+                logger.info(f"Creating project (mock): {title}")
+                return {
+                    'success': True,
+                    'project_id': f'proj_{int(time.time())}',
+                    'title': title,
+                    'description': description,
+                    'message': f'Project "{title}" created successfully (mock)'
+                }
 
-            return {
-                'success': True,
-                'project_id': f'proj_{int(time.time())}',
-                'title': title,
-                'description': description,
-                'message': f'Project "{title}" created successfully'
-            }
+            # Real Archon HTTP API
+            import requests
+
+            logger.info(f"Creating project via Archon API: {title}")
+
+            response = requests.post(
+                f"{self.archon_api_url}/projects",
+                json={
+                    "title": title,
+                    "description": description,
+                    "github_repo": github_repo
+                },
+                timeout=10
+            )
+
+            if response.status_code in [200, 201]:
+                data = response.json()
+                project_id = data.get('project_id') or data.get('project', {}).get('id')
+                logger.info(f"✅ Project created in Archon: {project_id}")
+                return {
+                    'success': True,
+                    'project_id': project_id,
+                    'title': title,
+                    'description': description,
+                    'message': f'Project "{title}" created successfully'
+                }
+            else:
+                logger.error(f"Archon API error: {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}',
+                    'message': f'Failed to create project: {response.text[:200]}'
+                }
+
         except Exception as e:
             logger.error(f"Failed to create project: {e}")
             return {
@@ -84,20 +121,62 @@ class ArchonClient:
             Dict with success, task_id, message
         """
         try:
-            # TODO: Call mcp__archon__manage_task when MCP server is available
-            logger.info(f"Creating task in project {project_id}: {title}")
+            if not self.use_real_mcp:
+                # Mock mode
+                logger.info(f"Creating task (mock) in project {project_id}: {title}")
+                return {
+                    'success': True,
+                    'task_id': f'task_{int(time.time())}',
+                    'project_id': project_id,
+                    'title': title,
+                    'description': description,
+                    'status': 'todo',
+                    'assignee': assignee,
+                    'feature': feature,
+                    'message': f'Task "{title}" created successfully (mock)'
+                }
 
-            return {
-                'success': True,
-                'task_id': f'task_{int(time.time())}',
-                'project_id': project_id,
-                'title': title,
-                'description': description,
-                'status': 'todo',
-                'assignee': assignee,
-                'feature': feature,
-                'message': f'Task "{title}" created successfully'
-            }
+            # Real Archon HTTP API
+            import requests
+
+            logger.info(f"Creating task via Archon API: {title}")
+
+            response = requests.post(
+                f"{self.archon_api_url}/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": title,
+                    "description": description,
+                    "assignee": assignee,
+                    "status": "todo"
+                },
+                timeout=10
+            )
+
+            if response.status_code in [200, 201]:
+                data = response.json()
+                task = data.get('task', {})
+                task_id = task.get('id')
+                logger.info(f"✅ Task created in Archon: {task_id}")
+                return {
+                    'success': True,
+                    'task_id': task_id,
+                    'project_id': project_id,
+                    'title': title,
+                    'description': description,
+                    'status': task.get('status', 'todo'),
+                    'assignee': assignee,
+                    'feature': feature,
+                    'message': f'Task "{title}" created successfully'
+                }
+            else:
+                logger.error(f"Archon API error: {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}',
+                    'message': f'Failed to create task: {response.text[:200]}'
+                }
+
         except Exception as e:
             logger.error(f"Failed to create task: {e}")
             return {
@@ -124,15 +203,43 @@ class ArchonClient:
             Dict with success, message
         """
         try:
-            # TODO: Call mcp__archon__manage_task for updates
-            logger.info(f"Updating task {task_id} to status: {status}")
+            if not self.use_real_mcp:
+                # Mock mode
+                logger.info(f"Updating task (mock) {task_id} to status: {status}")
+                return {
+                    'success': True,
+                    'task_id': task_id,
+                    'status': status,
+                    'message': f'Task status updated to {status} (mock)'
+                }
 
-            return {
-                'success': True,
-                'task_id': task_id,
-                'status': status,
-                'message': f'Task status updated to {status}'
-            }
+            # Real Archon HTTP API
+            import requests
+
+            logger.info(f"Updating task via Archon API: {task_id} -> {status}")
+
+            response = requests.put(
+                f"{self.archon_api_url}/tasks/{task_id}",
+                json={"status": status},
+                timeout=10
+            )
+
+            if response.status_code in [200, 201]:
+                logger.info(f"✅ Task status updated in Archon: {status}")
+                return {
+                    'success': True,
+                    'task_id': task_id,
+                    'status': status,
+                    'message': f'Task status updated to {status}'
+                }
+            else:
+                logger.error(f"Archon API error: {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}',
+                    'message': f'Failed to update task status: {response.text[:200]}'
+                }
+
         except Exception as e:
             logger.error(f"Failed to update task status: {e}")
             return {
@@ -157,22 +264,152 @@ class ArchonClient:
             Dict with success, tasks list
         """
         try:
-            # TODO: Call mcp__archon__find_tasks
-            logger.info(f"Finding tasks for project {project_id}, status {status}")
+            if not self.use_real_mcp:
+                # Mock mode
+                logger.info(f"Finding tasks (mock) for project {project_id}, status {status}")
+                return {
+                    'success': True,
+                    'tasks': [],
+                    'count': 0,
+                    'message': 'No tasks found (mock mode)'
+                }
 
-            return {
-                'success': True,
-                'tasks': [],
-                'count': 0,
-                'message': 'No tasks found (MCP server not yet connected)'
-            }
+            # Real Archon HTTP API
+            import requests
+
+            logger.info(f"Finding tasks via Archon API: project={project_id}, status={status}")
+
+            params = {}
+            if project_id:
+                params['project_id'] = project_id
+            if status:
+                params['status'] = status
+
+            response = requests.get(
+                f"{self.archon_api_url}/tasks",
+                params=params,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                tasks = data.get('tasks', [])
+                logger.info(f"✅ Found {len(tasks)} tasks in Archon")
+                return {
+                    'success': True,
+                    'tasks': tasks,
+                    'count': len(tasks),
+                    'message': f'Found {len(tasks)} tasks'
+                }
+            else:
+                logger.error(f"Archon API error: {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}',
+                    'tasks': [],
+                    'count': 0
+                }
+
         except Exception as e:
             logger.error(f"Failed to find tasks: {e}")
             return {
                 'success': False,
                 'error': str(e),
-                'tasks': []
+                'tasks': [],
+                'count': 0
             }
+
+    def search_knowledge_base(
+        self,
+        query: str,
+        match_count: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Search Archon knowledge base for relevant documentation and code examples.
+
+        Uses direct Supabase full-text search to find:
+        - Cloppy AI patterns
+        - Data-testid selectors
+        - Code examples
+        - Documentation
+
+        Args:
+            query: Search query (keep short, 2-5 keywords)
+            match_count: Number of results to return
+
+        Returns:
+            Dict with success, results list
+        """
+        try:
+            if not self.use_real_mcp:
+                return {'success': False, 'results': [], 'message': 'RAG not enabled'}
+
+            # Use direct Supabase search (bypasses embedding requirement)
+            from supabase import create_client
+            import os
+
+            logger.info(f"RAG search via Supabase full-text: {query}")
+
+            # Connect to Supabase
+            supabase_url = os.getenv('SUPABASE_URL', 'https://hrrpicijvdfzoxwwjequ.supabase.co')
+            supabase_key = os.getenv('SUPABASE_KEY')
+
+            if not supabase_key:
+                logger.error("SUPABASE_KEY not found in environment")
+                return {'success': False, 'results': [], 'error': 'Missing SUPABASE_KEY'}
+
+            supabase = create_client(supabase_url, supabase_key)
+
+            # Split query into keywords for ILIKE search
+            keywords = query.lower().split()
+
+            # Build search query
+            search = supabase.table('archon_crawled_pages').select('url, content, metadata')
+
+            # Apply ILIKE filters for each keyword
+            for keyword in keywords:
+                search = search.ilike('content', f'%{keyword}%')
+
+            # Execute search with limit
+            result = search.limit(match_count).execute()
+
+            if result.data:
+                # Format results to match expected structure
+                formatted_results = []
+                for page in result.data:
+                    # Extract snippet around first keyword
+                    content = page.get('content', '')
+                    first_keyword = keywords[0] if keywords else ''
+                    idx = content.lower().find(first_keyword)
+
+                    if idx >= 0:
+                        snippet_start = max(0, idx - 100)
+                        snippet_end = min(len(content), idx + 400)
+                        snippet = content[snippet_start:snippet_end]
+                    else:
+                        snippet = content[:500]
+
+                    formatted_results.append({
+                        'url': page.get('url', ''),
+                        'content': snippet,
+                        'metadata': page.get('metadata', {}),
+                        'relevance': 'full-text match'
+                    })
+
+                logger.info(f"✅ RAG search found {len(formatted_results)} matches from Supabase")
+                return {
+                    'success': True,
+                    'results': formatted_results,
+                    'total_found': len(formatted_results),
+                    'search_method': 'supabase_fulltext'
+                }
+            else:
+                logger.warning(f"⚠️  No results found for query: {query}")
+                return {'success': True, 'results': [], 'total_found': 0}
+
+        except Exception as e:
+            logger.error(f"RAG search failed: {e}")
+            return {'success': False, 'results': [], 'error': str(e)}
 
     def breakdown_feature_to_tasks(
         self,

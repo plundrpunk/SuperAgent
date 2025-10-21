@@ -34,7 +34,14 @@ class KayaAgent(BaseAgent):
     """
 
     # Intent patterns for command parsing
+    # ORDER MATTERS! More specific patterns should come BEFORE general ones
     INTENT_PATTERNS = {
+        'build_feature': [
+            r'build\s+(?:me\s+)?(?:a|an)?\s*(.+)',
+            r'create\s+(?:a|an)?\s*(.+?)\s+(?:feature|system|module)',
+            r'implement\s+(.+)',
+            r'add\s+(.+?)\s+(?:feature|functionality)',
+        ],
         'create_test': [
             r'create.*test.*for\s+(.+)',
             r'write.*test.*for\s+(.+)',
@@ -49,11 +56,18 @@ class KayaAgent(BaseAgent):
             r'patch.*task\s+(\w+)',
             r'repair.*task\s+(\w+)',
         ],
+        'iterative_fix': [
+            r'fix\s+all\s+(?:test\s+)?(?:failures|issues|problems)(?:\s+in\s+(.+))?',
+            r'iterate\s+(?:and\s+)?fix\s+until\s+(?:all\s+)?(?:tests\s+)?pass(?:\s+in\s+(.+))?',
+            r'test\s+(?:and\s+)?fix\s+(?:all\s+)?(?:issues|problems)(?:\s+in\s+(.+))?',
+            r'fix\s+(?:the\s+)?(?:fucking\s+)?app(?:\s+in\s+(.+))?',
+        ],
         'validate': [
-            r'validate\s+(.+)',
-            r'verify\s+(.+)',
+            r'^validate\s+tests?/.+\.spec\.ts$',  # Only match specific test file paths
+            r'^verify\s+tests?/.+\.spec\.ts$',
         ],
         'status': [
+            r'^status$',  # Match only plain "status" command
             r'status.*task\s+(\w+)',
             r'what.*status.*task\s+(\w+)',
         ],
@@ -73,12 +87,6 @@ class KayaAgent(BaseAgent):
             r'read\s+(.+)\s+and\s+(?:create|make|build)\s+(?:a|an)?\s*(?:execution\s+)?plan',
             r'read\s+(.+)\s+(?:then|and)\s+plan',
         ],
-        'iterative_fix': [
-            r'fix\s+all\s+(?:test\s+)?(?:failures|issues|problems)(?:\s+in\s+(.+))?',
-            r'iterate\s+(?:and\s+)?fix\s+until\s+(?:all\s+)?(?:tests\s+)?pass(?:\s+in\s+(.+))?',
-            r'test\s+(?:and\s+)?fix\s+(?:all\s+)?(?:issues|problems)(?:\s+in\s+(.+))?',
-            r'fix\s+(?:the\s+)?(?:fucking\s+)?app(?:\s+in\s+(.+))?',
-        ],
         'orchestrate_mission': [
             r'(?:execute|start|begin)\s+(?:the\s+)?mission',
             r'(?:read|check)\s+(?:the\s+)?mission\s+brief',
@@ -91,12 +99,6 @@ class KayaAgent(BaseAgent):
             r'clear\s+model\s+override',
             r'reset\s+models?',
         ],
-        'build_feature': [
-            r'build\s+(?:me\s+)?(?:a|an)?\s*(.+)',
-            r'create\s+(?:a|an)?\s*(.+?)\s+(?:feature|system|module)',
-            r'implement\s+(.+)',
-            r'add\s+(.+?)\s+(?:feature|functionality)',
-        ]
     }
 
     def __init__(self):
@@ -1397,6 +1399,168 @@ class KayaAgent(BaseAgent):
         }
 
 
+    def _execute_test_task_with_validation(
+        self,
+        task: Dict[str, Any],
+        project_id: str,
+        context: Optional[Dict[str, Any]] = None,
+        max_fix_attempts: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Execute a test task with full validation and auto-fixing loop.
+
+        This is the core autonomous loop:
+        1. Scribe generates test
+        2. Runner validates test execution
+        3. If failed, Medic fixes and re-validates
+        4. Repeat up to max_fix_attempts
+        5. Update Archon task status
+
+        Args:
+            task: Task dict with task_id, title, description
+            project_id: Archon project ID
+            context: Optional execution context
+            max_fix_attempts: Max Medic fix attempts (default 3)
+
+        Returns:
+            Dict with success, test_path, validation_result, fix_attempts
+        """
+        task_id = task['task_id']
+        task_title = task['title']
+        task_description = task['description']
+
+        logger.info(f"🎯 Executing test task: {task_title}")
+
+        try:
+            # Step 1: Scribe generates test
+            logger.info("📝 Scribe: Generating test...")
+            test_slots = {'raw_value': task_description}
+            scribe_result = self._handle_create_test(test_slots, context)
+
+            if not scribe_result.success:
+                self.archon.update_task_status(task_id, 'todo')
+                return {
+                    'success': False,
+                    'error': f"Scribe failed: {scribe_result.error}",
+                    'test_path': None
+                }
+
+            test_path = scribe_result.data.get('test_path')
+            logger.info(f"✅ Scribe: Test generated at {test_path}")
+
+            # Step 2: Runner validates test
+            logger.info("🏃 Runner: Validating test...")
+            runner_result = self._handle_run_test(
+                {'raw_value': test_path},
+                context
+            )
+
+            # Step 3: Auto-fix loop if test failed
+            fix_attempts = 0
+            while not runner_result.success and fix_attempts < max_fix_attempts:
+                fix_attempts += 1
+                logger.warning(f"❌ Test failed, attempt {fix_attempts}/{max_fix_attempts}")
+
+                # Lazy load Medic (with HITL escalation disabled for autonomous builds)
+                if not hasattr(self, '_medic_agent'):
+                    from agent_system.agents.medic import MedicAgent
+                    self._medic_agent = MedicAgent(disable_hitl_escalation=True)
+
+                # After 2 failed attempts, search Archon RAG for similar patterns
+                rag_context = None
+                if fix_attempts >= 2:
+                    logger.info(f"🔍 Searching Archon knowledge base for similar test patterns...")
+                    try:
+                        rag_results = self.archon.search_knowledge_base(
+                            query=f"{task.get('feature', '')} {test_path}",
+                            match_count=3
+                        )
+                        if rag_results.get('success'):
+                            rag_context = rag_results.get('results', [])
+                            logger.info(f"✅ Found {len(rag_context)} relevant patterns from Cloppy docs")
+                    except Exception as e:
+                        logger.warning(f"RAG search failed: {e}")
+
+                logger.info(f"🏥 Medic: Fixing test (attempt {fix_attempts})...")
+
+                # Extract error message from runner result
+                error_message = runner_result.error or "Test execution failed"
+                if runner_result.data and 'error_details' in runner_result.data:
+                    error_message = runner_result.data['error_details']
+
+                # Add RAG context to error message if available
+                if rag_context:
+                    error_message += f"\n\nRelevant patterns from Cloppy AI docs:\n"
+                    for idx, result in enumerate(rag_context, 1):
+                        error_message += f"\n{idx}. {result.get('content', '')[:200]}..."
+
+                # Medic attempts fix
+                medic_result = self._medic_agent.execute(
+                    test_path=test_path,
+                    error_message=error_message,
+                    task_id=task_id,
+                    feature=task.get('feature')
+                )
+
+                if not medic_result.success:
+                    logger.error(f"Medic fix failed: {medic_result.error}")
+                    break
+
+                logger.info("✅ Medic: Fix applied, re-validating...")
+
+                # Re-run test after fix
+                runner_result = self._handle_run_test(
+                    {'raw_value': test_path},
+                    context
+                )
+
+            # Step 4: Update Archon task status
+            if runner_result.success:
+                self.archon.update_task_status(
+                    task_id,
+                    'done',
+                    {
+                        'test_path': test_path,
+                        'validation': 'passed',
+                        'fix_attempts': fix_attempts
+                    }
+                )
+                logger.info(f"✅ Task completed: {task_title} (fixes: {fix_attempts})")
+                return {
+                    'success': True,
+                    'test_path': test_path,
+                    'validation_result': runner_result.data,
+                    'fix_attempts': fix_attempts
+                }
+            else:
+                # Failed after max attempts
+                self.archon.update_task_status(
+                    task_id,
+                    'review',  # Mark for human review
+                    {
+                        'test_path': test_path,
+                        'validation': 'failed',
+                        'fix_attempts': fix_attempts,
+                        'error': runner_result.error
+                    }
+                )
+                logger.error(f"❌ Task failed after {fix_attempts} fix attempts: {task_title}")
+                return {
+                    'success': False,
+                    'error': f"Test failed after {fix_attempts} fix attempts: {runner_result.error}",
+                    'test_path': test_path,
+                    'fix_attempts': fix_attempts
+                }
+
+        except Exception as e:
+            logger.exception(f"Error executing test task: {e}")
+            self.archon.update_task_status(task_id, 'todo')
+            return {
+                'success': False,
+                'error': f"Execution error: {str(e)}",
+                'test_path': None
+            }
+
     def _handle_build_feature(self, slots: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
         """
         Handle build_feature intent - create project, break into tasks, execute tasks.
@@ -1459,46 +1623,85 @@ class KayaAgent(BaseAgent):
                     created_tasks.append(task_result)
                     logger.info(f"  ✓ Task: {task_def['title']}")
 
-            # Step 4: Execute first task (others will be handled iteratively)
+            # Step 4: Execute ALL tasks with validation and fixing loop
             if created_tasks:
-                first_task = created_tasks[0]
-                logger.info(f"🚀 Starting execution: {first_task['title']}")
+                logger.info(f"🚀 Starting autonomous execution of {len(created_tasks)} tasks")
 
-                # Mark task as doing
-                self.archon.update_task_status(first_task['task_id'], 'doing')
+                completed_tasks = []
+                failed_tasks = []
 
-                # Route to Scribe for implementation
-                # For now, just create test if it's a test task
-                if 'test' in first_task['title'].lower():
-                    # Delegate to create_test handler
-                    test_slots = {'raw_value': first_task['description']}
-                    test_result = self._handle_create_test(test_slots, context)
+                for idx, task in enumerate(created_tasks, 1):
+                    logger.info(f"📝 Task {idx}/{len(created_tasks)}: {task['title']}")
 
-                    # Update task status based on result
-                    if test_result.success:
-                        self.archon.update_task_status(
-                            first_task['task_id'],
-                            'done',
-                            {'test_path': test_result.data.get('test_path')}
+                    # Mark task as doing
+                    self.archon.update_task_status(task['task_id'], 'doing')
+
+                    # Execute task (currently only supporting test tasks)
+                    if 'test' in task['title'].lower():
+                        task_result = self._execute_test_task_with_validation(
+                            task, project_id, context
                         )
+
+                        if task_result['success']:
+                            completed_tasks.append({
+                                'task_id': task['task_id'],
+                                'title': task['title'],
+                                'result': task_result
+                            })
+                            logger.info(f"✅ Task {idx} completed successfully")
+                        else:
+                            failed_tasks.append({
+                                'task_id': task['task_id'],
+                                'title': task['title'],
+                                'error': task_result.get('error', 'Unknown error')
+                            })
+                            logger.warning(f"❌ Task {idx} failed after retries")
                     else:
-                        self.archon.update_task_status(
-                            first_task['task_id'],
-                            'todo'  # Reset to todo on failure
-                        )
+                        # Non-test tasks - mark as todo for manual handling
+                        self.archon.update_task_status(task['task_id'], 'todo')
+                        logger.info(f"⏭️  Task {idx} requires manual implementation (non-test)")
 
-                    return AgentResult(
-                        success=True,
-                        data={
-                            'action': 'feature_build_started',
-                            'project_id': project_id,
-                            'project_title': project_result['title'],
-                            'tasks_created': len(created_tasks),
-                            'tasks': [t['title'] for t in created_tasks],
-                            'first_task_result': test_result.data,
-                            'message': f"✅ Feature build started! Project: {project_id}, Tasks: {len(created_tasks)}, First task completed."
-                        }
-                    )
+                # Build summary
+                total_tasks = len(created_tasks)
+                completed_count = len(completed_tasks)
+                failed_count = len(failed_tasks)
+
+                # Build completed tasks list
+                completed_list = "\n".join([f"  • {t['title']}" for t in completed_tasks])
+
+                # Build failed tasks list
+                failed_list = ""
+                if failed_tasks:
+                    failed_items = "\n".join([f"  • {t['title']}: {t['error']}" for t in failed_tasks])
+                    failed_list = f"\nFailed Tasks:\n{failed_items}"
+
+                summary_message = f"""
+🏗️  Feature Build Complete!
+
+Project: {project_id}
+Total Tasks: {total_tasks}
+✅ Completed: {completed_count}
+❌ Failed: {failed_count}
+
+Completed Tasks:
+{completed_list}
+{failed_list}
+"""
+
+                return AgentResult(
+                    success=(failed_count == 0),
+                    data={
+                        'action': 'feature_build_complete',
+                        'project_id': project_id,
+                        'project_title': project_result['title'],
+                        'tasks_created': total_tasks,
+                        'tasks_completed': completed_count,
+                        'tasks_failed': failed_count,
+                        'completed_tasks': completed_tasks,
+                        'failed_tasks': failed_tasks,
+                        'message': summary_message
+                    }
+                )
 
             return AgentResult(
                 success=True,

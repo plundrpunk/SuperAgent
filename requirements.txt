@@ -25,6 +25,8 @@ pytest-benchmark==4.0.0
 python-dotenv==1.0.1
 requests==2.31.0
 websockets>=13.0
+supabase>=2.0.0  # For direct RAG access
+mcp>=1.0.0  # MCP Python SDK for Archon integration
 
 # Development
 black==24.2.0

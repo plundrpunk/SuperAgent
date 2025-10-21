@@ -418,6 +418,15 @@ CRITICAL REQUIREMENTS:
         Returns:
             Prompt string
         """
+        # Load VisionFlow context if available
+        visionflow_context = ""
+        context_path = self.project_root / "visionflow_context.md"
+        if context_path.exists():
+            try:
+                visionflow_context = context_path.read_text()
+            except Exception as e:
+                print(f"[Scribe] Warning: Could not load visionflow_context.md: {e}")
+
         prompt = f"""You are Scribe, an expert Playwright test writer. Generate a complete, production-ready test following these requirements:
 
 TASK DESCRIPTION:
@@ -425,6 +434,9 @@ TASK DESCRIPTION:
 
 SCOPE/CONTEXT:
 {task_scope if task_scope else "Standard feature testing"}
+
+{"APPLICATION CONTEXT (VisionFlow/Cloppy AI):" if visionflow_context else ""}
+{visionflow_context}
 
 TEMPLATE (use as reference):
 ```typescript

@@ -3,62 +3,76 @@
 ## Application Overview
 VisionFlow (Cloppy_AI) is a visual canvas application with nodes, boards, AI chat, and real-time collaboration.
 
-## Common Data Test IDs (use these in tests)
-- `board-canvas` - Main canvas area
-- `create-board-btn` - Button to create new board
-- `board-title-input` - Input for board name
-- `node-create-btn` - Button to add new node
-- `export-pdf-btn` - Export to PDF button
-- `export-markdown-btn` - Export to Markdown button
-- `search-input` - Global search input
-- `search-filter-type` - Node type filter dropdown
-- `search-filter-date` - Date range filter
-- `search-results` - Search results container
-- `group-create-btn` - Create group button
-- `group-resize-handle` - Group resize handle
-- `group-title-input` - Group name input
-- `ai-chat-input` - AI chat message input
-- `ai-chat-send` - Send AI chat button
-- `node-{id}` - Individual node (replace {id} with actual ID)
-- `group-{id}` - Individual group (replace {id} with actual ID)
+## IMPORTANT: Selector Strategy
+**This app does NOT use data-testid attributes.** Use CSS class selectors and semantic locators instead.
+
+## Common Selectors (use these in tests)
+
+### Login Page
+- `input[type="email"]` - Email input on login page
+- `input[type="password"]` - Password input on login page
+- `button[type="submit"]` - Login submit button
+
+### Dashboard / Boards
+- `.vf-board-canvas` - Main canvas area
+- `.vf-board-glow-button` - Button to create new board (has text "Create New Board")
+- `input#boardName` - Input for board name in create modal
+- `.vf-toolbar-row button` - Toolbar buttons for adding nodes
+- `.vf-dashboard-card` - Board cards in dashboard list
+- `.vf-dashboard-grid` - Grid container for boards
+- Button containing "Export" text - Export buttons
+- Input with placeholder containing "search" - Search input
+
+## Key Pages & Routes
+- `/` or `/boards` - Dashboard with board list (requires login)
+- `/board/:id` - Individual board canvas view
+- `/dashboard/usage` - Usage dashboard
+- `/mcp-store` - MCP store
 
 ## User Flows
 
 ### Board Creation Flow
-1. Click `create-board-btn`
-2. Enter name in `board-title-input`
-3. Click save/submit
-4. Verify board appears in canvas
+1. Start at `/` or `/boards` page
+2. Click button with class `.vf-board-glow-button` (text: "Create New Board")
+3. Wait for modal to appear
+4. Enter name in `input#boardName`
+5. Click submit button (gradient purple/blue button)
+6. Wait for navigation to `/board/:id`
+7. Verify `.vf-board-canvas` is visible
+
+### Node Creation Flow (on board page)
+1. Be on `/board/:id` page
+2. Click one of the node type buttons in `.vf-toolbar-row`
+3. Node types: TEXT, IMAGE, VIDEO, PDF, AUDIO, WEBSITE, AI_CHAT, FOLDER, COMPUTER_USE
+4. Verify node appears on canvas
 
 ### Export Flow
 1. Have content in board
-2. Click `export-pdf-btn` or `export-markdown-btn`
-3. Wait for download
+2. Look for button containing "Export" text
+3. Click and wait for download
 4. Verify file was downloaded
 
-### Search Flow
-1. Enter text in `search-input`
-2. Apply filters via `search-filter-type`, `search-filter-date`
-3. Verify results in `search-results`
-4. Click result to navigate
-
-### Group Management Flow
-1. Click `group-create-btn`
-2. Draw/define group area on canvas
-3. Rename via `group-title-input`
-4. Resize via `group-resize-handle`
-5. Add nodes to group by drag/drop
-6. Connect to AI chat for context
+## Authentication
+- App requires login - ALWAYS handle auth first in tests
+- Test credentials: `process.env.TEST_EMAIL` / `process.env.TEST_PASSWORD`
+- Login flow:
+  1. Navigate to BASE_URL (will redirect to login if not authenticated)
+  2. Fill email input with `process.env.TEST_EMAIL`
+  3. Fill password input with `process.env.TEST_PASSWORD`
+  4. Click submit/login button
+  5. Wait for redirect to dashboard/boards page
+- After login, you can access boards and canvas
 
 ## Environment
-- BASE_URL: Set in .env file (typically http://localhost:3000)
-- Login: May require authentication first
+- BASE_URL: http://host.docker.internal:5175
+- Backend: http://localhost:3010
 - Database: PostgreSQL with vector search
 - Redis: For real-time features
 
 ## Test Requirements
-- Always use data-testid selectors
+- Use CSS class selectors (`.vf-*` classes) or semantic Playwright locators
+- Use `page.getByRole()`, `page.getByText()` for buttons/labels
 - Take screenshots after major actions
 - Test both happy path and error cases
-- Verify API responses when relevant
-- Test real-time updates if applicable
+- Handle authentication if needed
+- Wait for network idle on page loads
