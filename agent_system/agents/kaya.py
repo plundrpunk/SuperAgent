@@ -1404,7 +1404,7 @@ class KayaAgent(BaseAgent):
         task: Dict[str, Any],
         project_id: str,
         context: Optional[Dict[str, Any]] = None,
-        max_fix_attempts: int = 3
+        max_fix_attempts: int = 5
     ) -> Dict[str, Any]:
         """
         Execute a test task with full validation and auto-fixing loop.
@@ -1420,7 +1420,7 @@ class KayaAgent(BaseAgent):
             task: Task dict with task_id, title, description
             project_id: Archon project ID
             context: Optional execution context
-            max_fix_attempts: Max Medic fix attempts (default 3)
+            max_fix_attempts: Max Medic fix attempts (default 5)
 
         Returns:
             Dict with success, test_path, validation_result, fix_attempts
@@ -1447,6 +1447,20 @@ class KayaAgent(BaseAgent):
 
             test_path = scribe_result.data.get('test_path')
             logger.info(f"✅ Scribe: Test generated at {test_path}")
+
+            # Step 1.5: Critic pre-validates (LOG AND CONTINUE - don't block)
+            logger.info("🔍 Critic: Pre-validating test quality...")
+            try:
+                critic = self._get_agent('critic')
+                critic_result = critic.execute(test_path=test_path)
+
+                if not critic_result.success:
+                    logger.warning(f"⚠️  Critic found issues: {critic_result.error}")
+                    logger.warning("Continuing anyway - Medic will fix if needed")
+                else:
+                    logger.info("✅ Critic: Test quality approved")
+            except Exception as e:
+                logger.warning(f"Critic failed: {e}, continuing anyway")
 
             # Step 2: Runner validates test
             logger.info("🏃 Runner: Validating test...")
@@ -1618,6 +1632,12 @@ class KayaAgent(BaseAgent):
         try:
             logger.info(f"🏗️  Building feature: {feature}")
 
+            # Initialize cost tracking with $2 budget
+            total_cost = 0.0
+            budget_cap = 2.00  # User's max budget for tonight
+
+            logger.info(f"💰 Budget cap: ${budget_cap:.2f}")
+
             # Step 1: Create project in Archon
             project_result = self.archon.create_project(
                 title=f"Feature: {feature[:50]}",
@@ -1660,7 +1680,15 @@ class KayaAgent(BaseAgent):
                 failed_tasks = []
 
                 for idx, task in enumerate(created_tasks, 1):
-                    logger.info(f"📝 Task {idx}/{len(created_tasks)}: {task['title']}")
+                    # Check budget before executing
+                    if total_cost >= budget_cap:
+                        logger.warning(f"💰 Budget cap reached (${total_cost:.2f}), stopping execution")
+                        # Mark remaining tasks as 'todo'
+                        for remaining_task in created_tasks[idx-1:]:
+                            self.archon.update_task_status(remaining_task['task_id'], 'todo')
+                        break
+
+                    logger.info(f"📝 Task {idx}/{len(created_tasks)}: {task['title']} (budget: ${total_cost:.2f}/${budget_cap:.2f})")
 
                     # Mark task as doing
                     self.archon.update_task_status(task['task_id'], 'doing')
@@ -1668,8 +1696,14 @@ class KayaAgent(BaseAgent):
                     # Execute task (currently only supporting test tasks)
                     if 'test' in task['title'].lower():
                         task_result = self._execute_test_task_with_validation(
-                            task, project_id, context
+                            task, project_id, context, max_fix_attempts=5
                         )
+
+                        # Track cost from task result
+                        if isinstance(task_result, dict) and 'cost_usd' in task_result:
+                            task_cost = task_result.get('cost_usd', 0)
+                            total_cost += task_cost
+                            logger.info(f"💰 Task cost: ${task_cost:.3f}, Total: ${total_cost:.2f}/${budget_cap:.2f}")
 
                         if task_result['success']:
                             completed_tasks.append({
@@ -1689,6 +1723,59 @@ class KayaAgent(BaseAgent):
                         # Non-test tasks - mark as todo for manual handling
                         self.archon.update_task_status(task['task_id'], 'todo')
                         logger.info(f"⏭️  Task {idx} requires manual implementation (non-test)")
+
+                # SECOND PASS: Retry failed tasks with enhanced context
+                second_pass_completed = []
+                if failed_tasks and len(failed_tasks) <= 10:  # Don't retry if too many failures
+                    logger.info(f"🔄 SECOND PASS: Retrying {len(failed_tasks)} failed tasks with enhanced context")
+
+                    for idx, failed_task_info in enumerate(failed_tasks, 1):
+                        logger.info(f"🔄 Retry {idx}/{len(failed_tasks)}: {failed_task_info['title']}")
+
+                        # Fetch the full task details
+                        task_to_retry = None
+                        for task in created_tasks:
+                            if task['task_id'] == failed_task_info['task_id']:
+                                task_to_retry = task
+                                break
+
+                        if not task_to_retry:
+                            continue
+
+                        # Enhanced context for second pass
+                        enhanced_context = {
+                            **(context or {}),
+                            'retry_attempt': True,
+                            'previous_error': failed_task_info['error'],
+                            'first_pass_failed': True
+                        }
+
+                        # Retry with MORE attempts (5 → 7)
+                        logger.info(f"🔄 Retrying with 7 attempts and enhanced RAG context...")
+                        retry_result = self._execute_test_task_with_validation(
+                            task_to_retry,
+                            project_id,
+                            enhanced_context,
+                            max_fix_attempts=7  # Extra attempts on second pass
+                        )
+
+                        if retry_result['success']:
+                            second_pass_completed.append({
+                                'task_id': task_to_retry['task_id'],
+                                'title': task_to_retry['title'],
+                                'result': retry_result
+                            })
+                            logger.info(f"✅ Second pass SUCCESS: {task_to_retry['title']}")
+
+                            # Remove from failed_tasks
+                            failed_tasks = [t for t in failed_tasks if t['task_id'] != task_to_retry['task_id']]
+                        else:
+                            logger.error(f"❌ Second pass FAILED: {task_to_retry['title']}")
+
+                    # Update totals
+                    completed_tasks.extend(second_pass_completed)
+                    completed_count = len(completed_tasks)
+                    failed_count = len(failed_tasks)
 
                 # Build summary
                 total_tasks = len(created_tasks)
@@ -1711,6 +1798,7 @@ Project: {project_id}
 Total Tasks: {total_tasks}
 ✅ Completed: {completed_count}
 ❌ Failed: {failed_count}
+🔄 Second Pass: {len(second_pass_completed)} recovered
 
 Completed Tasks:
 {completed_list}
